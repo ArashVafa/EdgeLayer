@@ -27,6 +27,18 @@ async def lifespan(app: FastAPI):
     db.init_db()
     logger.info("Database initialized")
 
+    # Auto-seed on first deploy when DB is empty
+    with db.db_conn() as conn:
+        player_count = conn.execute("SELECT COUNT(*) as c FROM players").fetchone()["c"]
+    if player_count == 0:
+        logger.info("Empty database detected — seeding with initial data…")
+        try:
+            from seed import run as seed_run
+            seed_run()
+            logger.info("Database seeded successfully")
+        except Exception as e:
+            logger.warning(f"Seed failed: {e}")
+
     # Start background scrape scheduler
     try:
         from scheduler import start_scheduler
