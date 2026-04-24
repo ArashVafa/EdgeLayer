@@ -2,9 +2,8 @@
 EdgeLayer — FastAPI backend
 """
 import logging
-import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -232,7 +231,7 @@ async def health():
 
     return {
         "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "db": {
             "players": player_count,
             "upcoming_fixtures": fixture_count,
@@ -262,9 +261,8 @@ async def trigger_scrape(source: str, background_tasks: BackgroundTasks):
 
 async def _run_scrape(source: str):
     if source == "understat":
-        from scrapers.understat import scrape_all_players, scrape_top_players_matches
+        from scrapers.understat import scrape_all_players
         await scrape_all_players()
-        await scrape_top_players_matches(limit=100)
     elif source == "injuries":
         from scrapers.injuries import run_injury_scrape
         await run_injury_scrape()
