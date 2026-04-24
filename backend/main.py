@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import db
 from auth import router as auth_router
@@ -287,6 +288,29 @@ async def _run_scrape(source: str):
     elif source == "odds":
         from scrapers.odds import run_odds_scrape
         await run_odds_scrape()
+
+
+# ── Chatbot ───────────────────────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+@app.post("/api/chat/{player_id}")
+async def chat(player_id: int, body: ChatRequest):
+    """Player-specific chatbot powered by Claude. Stateless — caller manages history."""
+    player = db.get_player(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    from engine.chatbot import chat as do_chat
+    history = [{"role": m.role, "content": m.content} for m in body.history]
+    reply = await do_chat(player_id, body.message, history)
+    return {"reply": reply}
 
 
 # ── Run directly ──────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import ShotProfile from './ShotProfile.jsx'
 import DimensionCard from './DimensionCard.jsx'
 import RiskIndicators from './RiskIndicators.jsx'
 import NarrativePanel from './NarrativePanel.jsx'
+import ChatPanel from './ChatPanel.jsx'
 
 const SECTION = ({ title, children }) => (
   <div style={{ marginBottom: 24 }}>
@@ -197,6 +198,11 @@ export default function Dashboard({ playerId, player, onBack }) {
       {/* Narrative Panel */}
       <SECTION title="Narrative Analysis">
         <NarrativePanel narratives={report.narratives || {}} />
+      </SECTION>
+
+      {/* Chatbot */}
+      <SECTION title="Ask the Analyst">
+        <ChatPanel playerId={playerId} playerName={p?.name || 'this player'} />
       </SECTION>
 
       {/* Output Metrics */}
