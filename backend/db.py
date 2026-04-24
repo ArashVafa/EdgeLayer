@@ -127,6 +127,23 @@ def init_db():
             ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            hashed_password TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            token TEXT UNIQUE NOT NULL,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
         CREATE INDEX IF NOT EXISTS idx_match_logs_player ON match_logs(player_id, date);
         CREATE INDEX IF NOT EXISTS idx_reports_cache_player ON reports_cache(player_id, created_at);
@@ -416,3 +433,63 @@ def get_last_scrape(source: str):
             (source,)
         ).fetchone()
     return dict(row) if row else None
+
+
+# ── Users / Auth ──────────────────────────────────────────────────────────────
+
+def create_user(email: str, hashed_password: str) -> int:
+    with db_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO users (email, hashed_password) VALUES (?, ?)",
+            (email.lower().strip(), hashed_password)
+        )
+        return cur.lastrowid
+
+
+def get_user_by_email(email: str):
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE email=? AND is_active=1",
+            (email.lower().strip(),)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int):
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE id=? AND is_active=1", (user_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def update_user_password(user_id: int, hashed_password: str):
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE users SET hashed_password=? WHERE id=?",
+            (hashed_password, user_id)
+        )
+
+
+def create_reset_token(user_id: int, token: str, expires_at: str):
+    with db_conn() as conn:
+        conn.execute(
+            "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?,?,?)",
+            (user_id, token, expires_at)
+        )
+
+
+def get_reset_token(token: str):
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM password_reset_tokens WHERE token=? AND used=0",
+            (token,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def mark_reset_token_used(token: str):
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE password_reset_tokens SET used=1 WHERE token=?", (token,)
+        )

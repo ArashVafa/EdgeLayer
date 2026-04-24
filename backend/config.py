@@ -8,6 +8,13 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 FOOTBALL_DATA_API_KEY = os.getenv("FOOTBALL_DATA_API_KEY", "")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
 
+# Auth
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-please-change-in-production")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@edgelayer.app")
+
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///edgelayer.db")
 DB_PATH = DATABASE_URL.replace("sqlite:///", "")

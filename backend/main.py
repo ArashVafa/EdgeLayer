@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 import db
+from auth import router as auth_router
 from config import FRONTEND_URL, REPORT_CACHE_TTL
 from engine.scorer import build_report
 from engine.narrative import generate_narratives
@@ -59,6 +60,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router)
 
 app.add_middleware(
     CORSMiddleware,
