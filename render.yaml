@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: edgelayer-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FOOTBALL_DATA_API_KEY
+        sync: false
+      - key: ODDS_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        value: sqlite:///edgelayer.db
+      - key: FRONTEND_URL
+        sync: false
+    disk:
+      name: edgelayer-db
+      mountPath: /opt/render/project/src
+      sizeGB: 1
+    healthCheckPath: /api/health
+    autoDeploy: true

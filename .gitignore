@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+*.db
+*.sqlite3
+venv/
+.venv/
+env/
+dist/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.env.local
+.env.production
+
+# IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Render
+.render-buildpacks.yaml
+*.db-shm
+*.db-wal

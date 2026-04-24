@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EdgeLayer — Erling Haaland Intel Report</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0e11;
+  --surface: #131720;
+  --surface-2: #1a1f2e;
+  --surface-3: #222838;
+  --border: rgba(255,255,255,0.06);
+  --text: #e8eaf0;
+  --text-dim: #8892a4;
+  --text-muted: #4a5568;
+  --green: #22c55e;
+  --green-bg: rgba(34,197,94,0.08);
+  --red: #ef4444;
+  --red-bg: rgba(239,68,68,0.08);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245,158,11,0.08);
+  --blue: #3b82f6;
+  --blue-bg: rgba(59,130,246,0.08);
+  --cyan: #06b6d4;
+  --purple: #a855f7;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Outfit', sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+.noise {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.app { max-width: 1280px; margin: 0 auto; padding: 24px; position: relative; z-index: 1; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo-icon { width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, var(--cyan), var(--blue)); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; color: #fff; }
+.logo-text { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
+.logo-text span { color: var(--cyan); }
+.header-meta { text-align: right; }
+.header-meta .date { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+.header-meta .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--green-bg); color: var(--green); margin-top: 4px; border: 1px solid rgba(34,197,94,0.2); }
+
+/* Player Banner */
+.player-banner { display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px; margin-bottom: 24px; position: relative; overflow: hidden; }
+.player-banner::before { content: ''; position: absolute; top: -60px; right: -60px; width: 200px; height: 200px; border-radius: 50%; background: radial-gradient(circle, rgba(6,182,212,0.08), transparent); }
+.player-info h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+.player-info h1 .num { color: var(--cyan); font-family: var(--mono); }
+.player-sub { font-size: 14px; color: var(--text-dim); display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.player-sub span { display: flex; align-items: center; gap: 4px; }
+.player-sub .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); }
+
+/* Edge Score */
+.edge-ring { width: 140px; height: 140px; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.edge-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.edge-ring .score-value { font-family: var(--mono); font-size: 40px; font-weight: 700; color: var(--green); }
+.edge-ring .score-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+.edge-center { text-align: center; }
+
+/* Match Context */
+.match-strip { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 24px; text-align: center; }
+.match-team { font-size: 18px; font-weight: 700; }
+.match-team.away { text-align: right; }
+.match-team.home { text-align: left; }
+.match-vs { font-family: var(--mono); font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.match-vs .time { font-size: 14px; color: var(--amber); font-weight: 600; }
+
+/* Metric Grid */
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-dim); margin-bottom: 8px; font-weight: 500; }
+.metric-value { font-family: var(--mono); font-size: 26px; font-weight: 700; }
+.metric-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.metric-value.green { color: var(--green); }
+.metric-value.amber { color: var(--amber); }
+.metric-value.blue { color: var(--blue); }
+.metric-value.red { color: var(--red); }
+
+/* Sections */
+.section { margin-bottom: 24px; }
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); font-weight: 600; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+
+/* Match Log */
+.match-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.match-table th { text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); border-bottom: 1px solid var(--border); font-weight: 500; }
+.match-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-family: var(--mono); color: var(--text-dim); }
+.match-table td.bold { color: var(--text); font-weight: 500; }
+.match-table td.green { color: var(--green); }
+.match-table td.amber { color: var(--amber); }
+.match-table td.red { color: var(--red); }
+.match-table tr:hover td { background: rgba(255,255,255,0.02); }
+.result-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.result-pill.W { background: var(--green-bg); color: var(--green); }
+.result-pill.D { background: var(--amber-bg); color: var(--amber); }
+.result-pill.L { background: var(--red-bg); color: var(--red); }
+
+/* Dimension Cards */
+.dim-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.dim-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+.dim-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.dim-title { font-size: 14px; font-weight: 600; }
+.dim-score { font-family: var(--mono); font-size: 13px; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+.dim-score.high { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.15); }
+.dim-score.mid { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,0.15); }
+.dim-score.low { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.15); }
+.dim-score.info { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(59,130,246,0.15); }
+.dim-body { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+.dim-body strong { color: var(--text); font-weight: 500; }
+
+/* Shot Profile Bars */
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar-label { font-size: 12px; color: var(--text-dim); width: 120px; text-align: right; flex-shrink: 0; }
+.bar-track { flex: 1; height: 22px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-family: var(--mono); font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.9); min-width: 32px; }
+.bar-fill.cyan { background: linear-gradient(90deg, rgba(6,182,212,0.3), var(--cyan)); }
+.bar-fill.green { background: linear-gradient(90deg, rgba(34,197,94,0.3), var(--green)); }
+.bar-fill.amber { background: linear-gradient(90deg, rgba(245,158,11,0.3), var(--amber)); }
+.bar-fill.blue { background: linear-gradient(90deg, rgba(59,130,246,0.3), var(--blue)); }
+
+/* Risk Indicators */
+.risk-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.risk-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; text-align: center; }
+.risk-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-dim); margin-bottom: 6px; }
+.risk-value { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+.risk-value.green { color: var(--green); }
+.risk-value.amber { color: var(--amber); }
+.risk-value.red { color: var(--red); }
+
+/* Narrative */
+.mode-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.mode-tab { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; }
+.mode-tab.active { background: var(--cyan); color: #0b0e11; border-color: var(--cyan); font-weight: 600; }
+.narrative { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px 28px; }
+.narrative h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; display: none; }
+.narrative p { font-size: 14px; color: var(--text-dim); line-height: 1.75; margin-bottom: 12px; }
+.narrative p:last-child { margin-bottom: 0; }
+.highlight { color: var(--cyan); font-weight: 500; }
+.warn { color: var(--amber); font-weight: 500; }
+.pos { color: var(--green); font-weight: 500; }
+.neg { color: var(--red); font-weight: 500; }
+
+/* Recent Form dots */
+.form-row { display: flex; gap: 6px; margin-top: 8px; }
+.form-dot { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.form-dot.goal { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+.form-dot.assist { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(59,130,246,0.2); }
+.form-dot.blank { background: var(--surface-3); color: var(--text-muted); border: 1px solid var(--border); }
+
+/* Footer */
+.footer { text-align: center; padding: 32px 0 16px; font-size: 11px; color: var(--text-muted); line-height: 1.8; }
+
+@media (max-width: 768px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .dim-grid { grid-template-columns: 1fr; }
+  .risk-grid { grid-template-columns: 1fr; }
+  .player-banner { grid-template-columns: 1fr; }
+  .edge-ring { margin: 0 auto; }
+}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="app">
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">EL</div>
+    <div class="logo-text">Edge<span>Layer</span></div>
+  </div>
+  <div class="header-meta">
+    <div class="date">APR 07, 2026 — PRE-MATCH INTEL</div>
+    <div class="badge">LIVE DATA</div>
+  </div>
+</div>
+
+<!-- Player Banner -->
+<div class="player-banner">
+  <div class="player-info">
+    <h1>Erling Haaland <span class="num">#9</span></h1>
+    <div class="player-sub">
+      <span>Manchester City</span>
+      <span class="dot"></span>
+      <span>Striker · Left-footed</span>
+      <span class="dot"></span>
+      <span>Age 25</span>
+      <span class="dot"></span>
+      <span>Next: Chelsea (A) — Apr 12</span>
+    </div>
+  </div>
+  <div class="edge-ring">
+    <svg viewBox="0 0 140 140">
+      <circle cx="70" cy="70" r="62" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="8"/>
+      <!-- stroke-dasharray = 2*π*62 ≈ 389.56 | dashoffset = 389.56 * (1 - 0.81) = 74 -->
+      <circle cx="70" cy="70" r="62" fill="none" stroke="#22c55e" stroke-width="8"
+        stroke-dasharray="389.56" stroke-dashoffset="74" stroke-linecap="round"/>
+    </svg>
+    <div class="edge-center">
+      <div class="score-value">81</div>
+      <div class="score-label">Edge Score</div>
+    </div>
+  </div>
+</div>
+
+<!-- Match Strip -->
+<div class="match-strip">
+  <div class="match-team away">Chelsea</div>
+  <div class="match-vs">
+    <div class="time">16:30 BST</div>
+    <div>Stamford Bridge</div>
+    <div>Matchday 32</div>
+  </div>
+  <div class="match-team home">Man City</div>
+</div>
+
+<!-- Key Metrics -->
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-label">Season Goals (PL)</div>
+    <div class="metric-value green">22</div>
+    <div class="metric-sub">in 29 apps · 0.82/90</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Shots / 90</div>
+    <div class="metric-value blue">3.79</div>
+    <div class="metric-sub">102 total · 46% accuracy</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">xG (Season)</div>
+    <div class="metric-value green">21.87</div>
+    <div class="metric-sub">npxG/90: 0.70 · 99th %ile</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Last 5 Form</div>
+    <div class="metric-value amber">4G 1A</div>
+    <div class="metric-sub">3W 1D 1L · hot streak</div>
+  </div>
+</div>
+
+<!-- Recent Match Log -->
+<div class="section">
+  <div class="section-title">Recent Match Log</div>
+  <table class="match-table">
+    <thead>
+      <tr>
+        <th>Date</th><th>Opponent</th><th>H/A</th><th>Result</th>
+        <th>Min</th><th>G</th><th>A</th><th>Shots</th><th>xG</th><th>Rating</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Apr 02</td><td class="bold">Arsenal</td><td>H</td>
+        <td><span class="result-pill W">W 3-1</span></td>
+        <td>90</td><td class="green">2</td><td>0</td><td>5</td><td class="green">1.42</td><td class="green">8.4</td>
+      </tr>
+      <tr>
+        <td>Mar 29</td><td class="bold">Brentford</td><td>A</td>
+        <td><span class="result-pill W">W 2-0</span></td>
+        <td>90</td><td class="green">1</td><td>0</td><td>4</td><td>0.81</td><td>7.8</td>
+      </tr>
+      <tr>
+        <td>Mar 23</td><td class="bold">West Ham</td><td>H</td>
+        <td><span class="result-pill W">W 4-1</span></td>
+        <td>90</td><td class="green">1</td><td class="amber">1</td><td>6</td><td class="green">1.21</td><td class="green">8.9</td>
+      </tr>
+      <tr>
+        <td>Mar 16</td><td class="bold">Everton</td><td>A</td>
+        <td><span class="result-pill D">D 1-1</span></td>
+        <td>76</td><td class="green">1</td><td>0</td><td>3</td><td>0.65</td><td>6.9</td>
+      </tr>
+      <tr>
+        <td>Mar 09</td><td class="bold">Liverpool</td><td>H</td>
+        <td><span class="result-pill L">L 0-2</span></td>
+        <td>90</td><td>0</td><td>0</td><td>2</td><td class="amber">0.31</td><td class="amber">5.8</td>
+      </tr>
+      <tr>
+        <td>Mar 02</td><td class="bold">Spurs</td><td>A</td>
+        <td><span class="result-pill W">W 2-1</span></td>
+        <td>90</td><td class="green">1</td><td>0</td><td>5</td><td>0.94</td><td>7.5</td>
+      </tr>
+      <tr>
+        <td>Feb 23</td><td class="bold">Wolves</td><td>H</td>
+        <td><span class="result-pill W">W 3-0</span></td>
+        <td>90</td><td class="green">2</td><td>0</td><td>7</td><td class="green">1.68</td><td class="green">9.1</td>
+      </tr>
+      <tr>
+        <td>Feb 15</td><td class="bold">Fulham</td><td>A</td>
+        <td><span class="result-pill D">D 2-2</span></td>
+        <td>90</td><td class="green">1</td><td>0</td><td>4</td><td>0.73</td><td>7.1</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Shot Profile -->
+<div class="section">
+  <div class="section-title">Shot Profile</div>
+  <div style="max-width:600px">
+    <div class="bar-row">
+      <div class="bar-label">Left Foot</div>
+      <div class="bar-track"><div class="bar-fill cyan" style="width:72%">72%</div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Right Foot</div>
+      <div class="bar-track"><div class="bar-fill blue" style="width:19%">19%</div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Headers</div>
+      <div class="bar-track"><div class="bar-fill amber" style="width:9%">9%</div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">In-Box %</div>
+      <div class="bar-track"><div class="bar-fill green" style="width:84%">84%</div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Shot on Target %</div>
+      <div class="bar-track"><div class="bar-fill cyan" style="width:46%">46%</div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-label">Big Chances</div>
+      <div class="bar-track"><div class="bar-fill green" style="width:58%">14 total</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Dimension Cards -->
+<div class="section">
+  <div class="section-title">13-Dimension Analysis</div>
+  <div class="dim-grid">
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Player Performance & Form</div>
+        <div class="dim-score high">88/100</div>
+      </div>
+      <div class="dim-body">
+        <strong>Exceptional form over last 5 matches: 4G 1A</strong>, averaging 2.1 shots on target per game. Season xG of 21.87 vs 22 actual goals — near-perfect conversion. npxG/90 of 0.70 puts him in the 99th percentile league-wide. <strong>G–xG delta: +0.13</strong> (slight positive finisher premium, sustainable at this sample size).
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Opponent Analysis</div>
+        <div class="dim-score mid">64/100</div>
+      </div>
+      <div class="dim-body">
+        Chelsea have conceded <strong>38 goals in 31 PL matches</strong> (1.23/game), ranking 10th defensively. xGA of 41.2 suggests some luck. <strong>H2H: Haaland has scored in 3 of 4 career appearances vs Chelsea</strong>. Their high defensive line is vulnerable to the movement City use to create Haaland's chances.
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Team Context & Support</div>
+        <div class="dim-score high">79/100</div>
+      </div>
+      <div class="dim-body">
+        City sitting 2nd, mathematically in title race — <strong>full motivation</strong>. De Bruyne and Bernardo Silva both available (key creators). City creating 2.4 xG/game over last 8 matches, 3rd in league. <strong>De Bruyne expected to start</strong> — his 4.2 key passes/90 directly feeds Haaland's shot volume.
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Market Intelligence</div>
+        <div class="dim-score high">76/100</div>
+      </div>
+      <div class="dim-body">
+        Haaland anytime scorer: <strong>1.80 (implied 55.6%)</strong>. Our model probability: <strong>68%</strong> — creating +12.4% edge. First scorer: 4.50 (22.2% implied) vs model 31%. Shots total line: 3.5 — markets underestimating volume given Chelsea's high line. <span class="warn">Note: line movement toward Haaland since team news dropped.</span>
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Schedule & Fatigue</div>
+        <div class="dim-score high">82/100</div>
+      </div>
+      <div class="dim-body">
+        <strong>7 days rest since last match</strong> — no fatigue concern. No European game in between. City's next fixture after this is 5 days away (FA Cup), so no rotation expected. Haaland <strong>has NOT been subbed off in any of his last 6 starts</strong> — full 90 minutes virtually guaranteed.
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Injuries & Lineup</div>
+        <div class="dim-score high">85/100</div>
+      </div>
+      <div class="dim-body">
+        Haaland <strong>fully fit, no injury concerns</strong>. City have no major absences — Rodri back from suspension, Walker fit. Chelsea missing <strong>Fofana (knee) and Badiashile (hamstring)</strong> — both CB starters. Makeshift backline likely increases set-piece vulnerability. <span class="pos">+12 pts on opponent lineup weakness.</span>
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Change Detection</div>
+        <div class="dim-score mid">61/100</div>
+      </div>
+      <div class="dim-body">
+        Since last match: <strong>no significant lineup changes for City</strong>. Chelsea made 2 defensive changes (injury-forced). Haaland's xG in last 3 has been 1.42, 0.81, 1.21 — <strong>consistently high-volume</strong>. The shift is marginal positive: Chelsea's injury situation wasn't known at last report time.
+      </div>
+    </div>
+    <div class="dim-card">
+      <div class="dim-header">
+        <div class="dim-title">Risk Indicators</div>
+        <div class="dim-score mid">58/100</div>
+      </div>
+      <div class="dim-body">
+        <strong>Rotation risk: LOW</strong> — Guardiola has started Haaland in all matches when fit. <strong>Early sub risk: LOW</strong> — not subbed in last 6. <span class="warn">Key risk: Chelsea tend to sit deep away; if City lead early, Haaland's shot volume can drop in last 20 min.</span> Booking risk low (2 yellows all season). Overall risk profile is manageable.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Risk Indicators -->
+<div class="section">
+  <div class="section-title">Risk Summary</div>
+  <div class="risk-grid">
+    <div class="risk-item">
+      <div class="risk-label">Rotation Risk</div>
+      <div class="risk-value green">LOW</div>
+    </div>
+    <div class="risk-item">
+      <div class="risk-label">Injury Risk</div>
+      <div class="risk-value green">NONE</div>
+    </div>
+    <div class="risk-item">
+      <div class="risk-label">Early Sub Prob</div>
+      <div class="risk-value green">&lt;5%</div>
+    </div>
+    <div class="risk-item">
+      <div class="risk-label">Lineup Certainty</div>
+      <div class="risk-value green">95%</div>
+    </div>
+    <div class="risk-item">
+      <div class="risk-label">Market Adjusted</div>
+      <div class="risk-value amber">+12.4%</div>
+    </div>
+    <div class="risk-item">
+      <div class="risk-label">Overall Risk</div>
+      <div class="risk-value amber">MEDIUM</div>
+    </div>
+  </div>
+</div>
+
+<!-- Narrative Panel -->
+<div class="section">
+  <div class="section-title">Narrative Analysis</div>
+  <div class="mode-tabs">
+    <div class="mode-tab active" onclick="showMode('avg', this)">Average</div>
+    <div class="mode-tab" onclick="showMode('agg', this)">Aggressive</div>
+    <div class="mode-tab" onclick="showMode('con', this)">Conservative</div>
+  </div>
+  <div id="narrative-avg" class="narrative">
+    <p>Haaland enters this fixture in <span class="highlight">elite form</span> — 4 goals and 1 assist in his last 5 league outings, with xG numbers (1.42, 0.81, 1.21 in last 3) confirming the volume is real, not lucky. His <span class="pos">Edge Score of 81</span> reflects genuine alignment across the data.</p>
+    <p>The strongest angle is <span class="highlight">anytime scorer at 1.80</span>. Markets imply 55.6% probability; our model calculates 68% based on his shot profile, Chelsea's defensive absences (Fofana, Badiashile both out), and City's superior xG generation rate. That's a <strong>+12.4% model edge</strong> — meaningful on a liquid market.</p>
+    <p>Key risk: Chelsea tend to park when behind away from home. If City score early, Haaland's late-game shot volume sometimes dips. <span class="warn">Avoid over-staking first scorer or multi-goal props</span> — anytime scorer is where the value is cleanest. Confidence: <span class="pos">HIGH</span>.</p>
+  </div>
+  <div id="narrative-agg" class="narrative" style="display:none">
+    <p>This is a <span class="pos">bet-up spot</span>. Haaland is in form, City are motivated, Chelsea are missing their two best defenders, and the market hasn't fully adjusted. The <span class="highlight">+12.4% edge on anytime scorer</span> is significant — this is not a marginal play.</p>
+    <p>For aggressive angles: <span class="highlight">First scorer at 4.50</span> (model: 31%, implied: 22%) is live. <strong>Shots over 3.5</strong> at roughly evens deserves a stake — he's averaged 4.6 shots per game in his last 5. Consider a <strong>Haaland to score + City to win double</strong> — both legs are independently strong and the correlation is real.</p>
+    <p>For the full-risk play: <span class="highlight">Haaland 2+ goals</span>. He's scored braces in 3 of his last 8 home-or-away appearances against sides ranked outside top 6 defensively. Chelsea qualify. The market on this (~8.00) prices in less than 13% probability; we see closer to 22%. <span class="pos">Stack it.</span></p>
+  </div>
+  <div id="narrative-con" class="narrative" style="display:none">
+    <p>Haaland is a legitimate favourite to score, but <span class="warn">the market has moved</span> since the team news dropped. The 1.80 you see now may already have priced in much of the Chelsea defensive injury boost. <strong>Value erosion is real</strong> when markets are efficient on high-profile players.</p>
+    <p>The main concern: <span class="warn">Chelsea's defensive record at home (0.98 goals conceded/game vs 1.49 away)</span> is notably better. Stamford Bridge has historically been one of Haaland's tougher venues — 1 goal in 2 City away trips there. The H2H skews toward neutral ground.</p>
+    <p>If you must play: <span class="highlight">Haaland shots on target over 1.5</span> or contributing to a <span class="highlight">City clean sheet no bet</span> are lower-variance vehicles. Avoid first scorer (high vig) and multi-goal props. This is a <span class="warn">single-unit spot at best</span>. Confidence: MEDIUM.</p>
+  </div>
+</div>
+
+<!-- Output Metrics -->
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-label">Edge Score</div>
+    <div class="metric-value green">81</div>
+    <div class="metric-sub">out of 100</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Confidence</div>
+    <div class="metric-value green">HIGH</div>
+    <div class="metric-sub">≥75 threshold</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Risk Level</div>
+    <div class="metric-value amber">MEDIUM</div>
+    <div class="metric-sub">1-2 risk flags active</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Best Angle</div>
+    <div class="metric-value blue">ATS</div>
+    <div class="metric-sub">Anytime Scorer @ 1.80</div>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  EdgeLayer is an analytical tool for informational purposes only.<br>
+  Gambling involves risk. Please bet responsibly and within your means.<br>
+  Data sourced from Understat, football-data.org, and The Odds API.<br>
+  © 2026 EdgeLayer
+</div>
+
+</div><!-- /app -->
+<script>
+function showMode(mode, el) {
+  ['avg','agg','con'].forEach(m => {
+    document.getElementById('narrative-' + m).style.display = m === mode ? 'block' : 'none';
+  });
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>
