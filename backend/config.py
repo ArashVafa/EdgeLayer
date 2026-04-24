@@ -33,7 +33,7 @@ ODDS_INTERVAL_DEFAULT = 4 * 3600    # 4 hours otherwise
 REPORT_CACHE_TTL = 2 * 3600         # 2 hours
 
 # Claude model
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
+CLAUDE_MODEL = "claude-sonnet-4-6"
 
 # football-data.org
 FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
