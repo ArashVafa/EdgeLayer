@@ -1,83 +1,34 @@
-import { useState, useEffect } from 'react'
-import { AuthProvider, useAuth } from './context/AuthContext'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import ForgotPasswordPage from './pages/ForgotPasswordPage'
-import ResetPasswordPage from './pages/ResetPasswordPage'
+import { useState } from 'react'
 import PlayerSearch from './components/PlayerSearch.jsx'
 import Dashboard from './components/Dashboard.jsx'
 
 export default function App() {
-  return (
-    <AuthProvider>
-      <div className="noise-overlay" />
-      <Router />
-    </AuthProvider>
-  )
-}
-
-function Router() {
-  const { user, loading } = useAuth()
-
-  // Check URL for password reset token on first load
-  const [page, setPage] = useState(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('reset_token')) return 'reset'
-    return 'login'
-  })
-
-  const resetToken = new URLSearchParams(window.location.search).get('reset_token') || ''
-
-  if (loading) return <LoadingScreen />
-
-  // If logged in, show the main app
-  if (user) return <MainApp />
-
-  // Auth flow
-  if (page === 'register') return <RegisterPage onNavigate={setPage} />
-  if (page === 'forgot')   return <ForgotPasswordPage onNavigate={setPage} />
-  if (page === 'reset')    return <ResetPasswordPage token={resetToken} onNavigate={setPage} />
-  return <LoginPage onNavigate={setPage} />
-}
-
-function LoadingScreen() {
-  return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', color: 'var(--text-dim)', fontSize: 14,
-    }}>
-      Loading…
-    </div>
-  )
-}
-
-function MainApp() {
-  const { user, logout } = useAuth()
   const [selectedPlayer, setSelectedPlayer] = useState(null)
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px', position: 'relative', zIndex: 1 }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 32, paddingBottom: 20,
-        borderBottom: '1px solid var(--border)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 8,
-            background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, fontSize: 14, color: '#fff', cursor: 'pointer',
-          }} onClick={() => setSelectedPlayer(null)}>
-            EL
+    <>
+      <div className="noise-overlay" />
+      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px', position: 'relative', zIndex: 1 }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 32, paddingBottom: 20,
+          borderBottom: '1px solid var(--border)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 8,
+              background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: 14, color: '#fff', cursor: 'pointer',
+            }} onClick={() => setSelectedPlayer(null)}>
+              EL
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', cursor: 'pointer' }}
+              onClick={() => setSelectedPlayer(null)}>
+              Edge<span style={{ color: 'var(--cyan)' }}>Layer</span>
+            </div>
           </div>
-          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', cursor: 'pointer' }}
-            onClick={() => setSelectedPlayer(null)}>
-            Edge<span style={{ color: 'var(--cyan)' }}>Layer</span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-dim)' }}>
               {new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()} — PRE-MATCH INTEL
@@ -91,37 +42,27 @@ function MainApp() {
               LIVE DATA
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>{user.email}</span>
-            <button onClick={logout} style={{
-              fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 6,
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              color: 'var(--text-dim)', cursor: 'pointer',
-            }}>
-              Sign out
-            </button>
-          </div>
+        </div>
+
+        {/* Main content */}
+        {!selectedPlayer ? (
+          <LandingPage onSelect={setSelectedPlayer} />
+        ) : (
+          <Dashboard playerId={selectedPlayer.id} player={selectedPlayer} onBack={() => setSelectedPlayer(null)} />
+        )}
+
+        {/* Footer */}
+        <div style={{
+          textAlign: 'center', padding: '32px 0 16px',
+          fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8
+        }}>
+          EdgeLayer is an analytical tool for informational purposes only.<br />
+          Gambling involves risk. Please bet responsibly and within your means.<br />
+          Data sourced from Understat, football-data.org, and The Odds API.<br />
+          © 2026 EdgeLayer
         </div>
       </div>
-
-      {/* Main content */}
-      {!selectedPlayer ? (
-        <LandingPage onSelect={setSelectedPlayer} />
-      ) : (
-        <Dashboard playerId={selectedPlayer.id} player={selectedPlayer} onBack={() => setSelectedPlayer(null)} />
-      )}
-
-      {/* Footer */}
-      <div style={{
-        textAlign: 'center', padding: '32px 0 16px',
-        fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8
-      }}>
-        EdgeLayer is an analytical tool for informational purposes only.<br />
-        Gambling involves risk. Please bet responsibly and within your means.<br />
-        Data sourced from Understat, football-data.org, and The Odds API.<br />
-        © 2026 EdgeLayer
-      </div>
-    </div>
+    </>
   )
 }
 
