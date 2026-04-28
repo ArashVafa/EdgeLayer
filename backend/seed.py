@@ -59,22 +59,30 @@ PL_TEAMS = [
 
 FIXTURES_DATA = [
     # (home_team, away_team, date, status, score)
-    ("Arsenal",   "Chelsea",  "2026-04-26 16:30", "scheduled", None),
-    ("Liverpool", "Man City", "2026-04-27 14:00", "scheduled", None),
-    ("Man City",  "Chelsea",  "2026-05-03 15:00", "scheduled", None),
-    ("Spurs",     "Arsenal",  "2026-05-04 15:00", "scheduled", None),
-    ("Newcastle", "Liverpool","2026-05-03 15:00", "scheduled", None),
-    ("Wolves",    "Man Utd",  "2026-04-26 15:00", "scheduled", None),
-    ("Brighton",  "Brentford","2026-04-27 15:00", "scheduled", None),
-    ("West Ham",  "Everton",  "2026-04-26 15:00", "scheduled", None),
-    ("Aston Villa","Fulham",  "2026-04-26 15:00", "scheduled", None),
-    ("Nott'm Forest","Leicester","2026-04-27 15:00", "scheduled", None),
+    # GW36
+    ("Man City",  "Chelsea",   "2026-05-03 15:00", "scheduled", None),
+    ("Newcastle", "Liverpool", "2026-05-03 15:00", "scheduled", None),
+    ("Spurs",     "Arsenal",   "2026-05-04 14:00", "scheduled", None),
+    ("Brighton",  "Man Utd",   "2026-05-03 15:00", "scheduled", None),
+    ("Aston Villa","Wolves",   "2026-05-03 15:00", "scheduled", None),
+    # GW37
+    ("Arsenal",   "Man City",  "2026-05-10 15:00", "scheduled", None),
+    ("Liverpool", "Spurs",     "2026-05-10 15:00", "scheduled", None),
+    ("Chelsea",   "Newcastle", "2026-05-10 15:00", "scheduled", None),
+    ("Brentford", "Aston Villa","2026-05-10 15:00", "scheduled", None),
+    ("Man Utd",   "West Ham",  "2026-05-10 15:00", "scheduled", None),
+    # GW38 — final day
+    ("Man City",  "Brentford", "2026-05-17 16:00", "scheduled", None),
+    ("Arsenal",   "Everton",   "2026-05-17 16:00", "scheduled", None),
+    ("Liverpool", "Crystal Palace","2026-05-17 16:00", "scheduled", None),
+    ("Chelsea",   "Bournemouth","2026-05-17 16:00", "scheduled", None),
+    ("Spurs",     "Brighton",  "2026-05-17 16:00", "scheduled", None),
     # Recently completed
-    ("Arsenal",   "Spurs",    "2026-04-14 12:30", "completed", "3-0"),
-    ("Liverpool", "Chelsea",  "2026-04-13 16:30", "completed", "2-1"),
-    ("Man City",  "Arsenal",  "2026-04-12 16:30", "completed", "1-1"),
-    ("Chelsea",   "Newcastle","2026-04-06 14:00", "completed", "2-2"),
-    ("Man Utd",   "Liverpool","2026-04-05 14:00", "completed", "0-2"),
+    ("Arsenal",   "Chelsea",   "2026-04-26 16:30", "completed", "2-1"),
+    ("Liverpool", "Man City",  "2026-04-27 14:00", "completed", "2-1"),
+    ("Brighton",  "Brentford", "2026-04-27 15:00", "completed", "1-1"),
+    ("Arsenal",   "Spurs",     "2026-04-14 12:30", "completed", "3-0"),
+    ("Liverpool", "Chelsea",   "2026-04-13 16:30", "completed", "2-1"),
 ]
 
 INJURY_DATA = [

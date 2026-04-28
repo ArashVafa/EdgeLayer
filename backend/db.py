@@ -334,18 +334,19 @@ def upsert_fixture(home_team: str, away_team: str, date: str,
 
 
 def get_upcoming_fixtures(team: str = None, limit: int = 10):
+    now = __import__('datetime').datetime.utcnow().strftime("%Y-%m-%d %H:%M")
     with db_conn() as conn:
         if team:
             rows = conn.execute("""
                 SELECT * FROM fixtures
-                WHERE (home_team=? OR away_team=?) AND status='scheduled'
+                WHERE (home_team=? OR away_team=?) AND status='scheduled' AND date >= ?
                 ORDER BY date ASC LIMIT ?
-            """, (team, team, limit)).fetchall()
+            """, (team, team, now, limit)).fetchall()
         else:
             rows = conn.execute("""
-                SELECT * FROM fixtures WHERE status='scheduled'
+                SELECT * FROM fixtures WHERE status='scheduled' AND date >= ?
                 ORDER BY date ASC LIMIT ?
-            """, (limit,)).fetchall()
+            """, (now, limit)).fetchall()
     return [dict(r) for r in rows]
 
 

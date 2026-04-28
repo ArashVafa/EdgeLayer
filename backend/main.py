@@ -287,6 +287,14 @@ async def _run_scrape(source: str):
         await run_odds_scrape()
 
 
+@app.post("/api/admin/reseed-fixtures")
+async def reseed_fixtures():
+    """Replace fixtures with fresh seed data (use when no API key is set)."""
+    from seed import run as seed_run
+    seed_run()
+    return {"message": "Fixtures re-seeded"}
+
+
 # ── Chatbot ───────────────────────────────────────────────────────────────────
 
 class ChatMessage(BaseModel):
