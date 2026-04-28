@@ -127,6 +127,27 @@ def init_db():
             ran_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS llm_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            use_case TEXT NOT NULL,
+            player_id INTEGER,
+            user_message TEXT,
+            response TEXT,
+            input_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            latency_ms INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS llm_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            log_id INTEGER REFERENCES llm_log(id),
+            rating INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
@@ -434,6 +455,44 @@ def get_last_scrape(source: str):
             (source,)
         ).fetchone()
     return dict(row) if row else None
+
+
+# ── LLM Log ──────────────────────────────────────────────────────────────────
+
+def log_llm(provider: str, model: str, use_case: str, player_id: int | None,
+            user_message: str, response: str, input_tokens: int,
+            output_tokens: int, latency_ms: int):
+    with db_conn() as conn:
+        conn.execute("""
+            INSERT INTO llm_log
+                (provider, model, use_case, player_id, user_message, response,
+                 input_tokens, output_tokens, latency_ms)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        """, (provider, model, use_case, player_id,
+              user_message[:2000], response[:8000],
+              input_tokens, output_tokens, latency_ms))
+
+
+def add_llm_feedback(log_id: int, rating: int):
+    with db_conn() as conn:
+        conn.execute(
+            "INSERT INTO llm_feedback (log_id, rating) VALUES (?,?)",
+            (log_id, rating)
+        )
+
+
+def get_llm_stats():
+    with db_conn() as conn:
+        row = conn.execute("""
+            SELECT
+                COUNT(*) as total_calls,
+                SUM(input_tokens + output_tokens) as total_tokens,
+                AVG(latency_ms) as avg_latency_ms,
+                provider, use_case
+            FROM llm_log
+            GROUP BY provider, use_case
+        """).fetchall()
+    return [dict(r) for r in row]
 
 
 # ── Users / Auth ──────────────────────────────────────────────────────────────

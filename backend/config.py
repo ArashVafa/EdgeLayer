@@ -8,6 +8,15 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 FOOTBALL_DATA_API_KEY = os.getenv("FOOTBALL_DATA_API_KEY", "")
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
 
+# LLM
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+# Auto-select provider: prefer Groq (free) → Anthropic → none
+LLM_PROVIDER = os.getenv(
+    "LLM_PROVIDER",
+    "groq" if os.getenv("GROQ_API_KEY") else ("anthropic" if os.getenv("ANTHROPIC_API_KEY") else "none")
+)
+
 # Auth
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-please-change-in-production")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
