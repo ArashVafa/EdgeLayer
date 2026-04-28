@@ -118,5 +118,7 @@ async def chat(player_id: int, message: str, history: list[dict]) -> str:
         )
         return response.content[0].text.strip()
     except Exception as e:
-        logger.error(f"Chatbot API error: {e}")
-        return f"Sorry, I couldn't process that request. Please try again. ({type(e).__name__})"
+        logger.error(f"Chatbot API error [{type(e).__name__}]: {e}")
+        # Surface more detail in development to help diagnose
+        detail = getattr(e, 'message', None) or getattr(e, 'body', None) or str(e)
+        return f"API error: {detail}"
