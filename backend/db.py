@@ -166,17 +166,19 @@ def init_db():
         );
 
         CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
-        CREATE INDEX IF NOT EXISTS idx_players_fpl ON players(fpl_id);
         CREATE INDEX IF NOT EXISTS idx_match_logs_player ON match_logs(player_id, date);
         CREATE INDEX IF NOT EXISTS idx_reports_cache_player ON reports_cache(player_id, created_at);
         """)
 
-    # Safe migration: add fpl_id if not present on older DBs
+    # Safe migration: add fpl_id if not present on older DBs, then index it
     with db_conn() as conn:
         try:
             conn.execute("ALTER TABLE players ADD COLUMN fpl_id INTEGER")
         except Exception:
             pass  # column already exists
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_players_fpl ON players(fpl_id)"
+        )
 
 
 # ── Players ──────────────────────────────────────────────────────────────────
