@@ -55,6 +55,12 @@ def job_odds():
     _run_async(run_odds_scrape())
 
 
+def job_fpl_history():
+    logger.info("Scheduler: running FPL match history scrape")
+    from scrapers.fpl_history import run_fpl_history_scrape
+    _run_async(run_fpl_history_scrape())
+
+
 def start_scheduler():
     """Register all jobs and start the scheduler."""
     # Understat: first run 30 min after startup to avoid hammering on every restart.
@@ -88,7 +94,14 @@ def start_scheduler():
         trigger=IntervalTrigger(seconds=ODDS_INTERVAL_DEFAULT),
         id="odds",
         replace_existing=True,
-        # Odds scrape is not run on startup — needs valid API key
+    )
+
+    _scheduler.add_job(
+        job_fpl_history,
+        trigger=IntervalTrigger(hours=6),
+        id="fpl_history",
+        replace_existing=True,
+        next_run_time=_now() + timedelta(minutes=5),  # 5min after startup, after injuries run
     )
 
     _scheduler.start()

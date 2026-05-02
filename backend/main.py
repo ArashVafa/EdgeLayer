@@ -264,7 +264,7 @@ async def health():
 @app.post("/api/admin/scrape/{source}")
 async def trigger_scrape(source: str, background_tasks: BackgroundTasks):
     """Manually trigger a scrape. Sources: understat, injuries, fixtures, odds."""
-    valid = {"understat", "injuries", "fixtures", "odds"}
+    valid = {"understat", "injuries", "fixtures", "odds", "fpl_history"}
     if source not in valid:
         raise HTTPException(status_code=400, detail=f"Unknown source. Valid: {valid}")
 
@@ -285,6 +285,9 @@ async def _run_scrape(source: str):
     elif source == "odds":
         from scrapers.odds import run_odds_scrape
         await run_odds_scrape()
+    elif source == "fpl_history":
+        from scrapers.fpl_history import run_fpl_history_scrape
+        await run_fpl_history_scrape()
 
 
 @app.post("/api/admin/reseed-fixtures")

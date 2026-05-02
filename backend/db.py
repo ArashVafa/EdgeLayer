@@ -166,9 +166,17 @@ def init_db():
         );
 
         CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
+        CREATE INDEX IF NOT EXISTS idx_players_fpl ON players(fpl_id);
         CREATE INDEX IF NOT EXISTS idx_match_logs_player ON match_logs(player_id, date);
         CREATE INDEX IF NOT EXISTS idx_reports_cache_player ON reports_cache(player_id, created_at);
         """)
+
+    # Safe migration: add fpl_id if not present on older DBs
+    with db_conn() as conn:
+        try:
+            conn.execute("ALTER TABLE players ADD COLUMN fpl_id INTEGER")
+        except Exception:
+            pass  # column already exists
 
 
 # ── Players ──────────────────────────────────────────────────────────────────
@@ -188,6 +196,29 @@ def get_player(player_id: int):
             "SELECT * FROM players WHERE id = ?", (player_id,)
         ).fetchone()
     return dict(row) if row else None
+
+
+def get_all_players_for_fpl_match():
+    """Return all players for FPL name-matching (id, name)."""
+    with db_conn() as conn:
+        rows = conn.execute("SELECT id, name FROM players").fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_player_fpl_id(player_id: int, fpl_id: int):
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE players SET fpl_id=? WHERE id=?", (fpl_id, player_id)
+        )
+
+
+def get_players_with_fpl_id():
+    """Return players that have a known FPL ID (for match history scraping)."""
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, team, fpl_id FROM players WHERE fpl_id IS NOT NULL"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def upsert_player(name: str, team: str, position: str, understat_id: int) -> int:

@@ -1,144 +1,125 @@
 """
-Injury scraper — premierinjuries.com
-Scrapes the injury table and stores results in the injuries table.
+Injury scraper — Fantasy Premier League bootstrap-static API (public, no auth).
+Also stores FPL player IDs for use by the match history scraper.
 """
 import logging
 
 import httpx
-from bs4 import BeautifulSoup
 
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from config import PREMIER_INJURIES_URL
 import db
 
 logger = logging.getLogger(__name__)
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-GB,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Cache-Control": "max-age=0",
-}
+FPL_URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
 
-# Map known status strings to canonical values
+# FPL status codes → our canonical status
 STATUS_MAP = {
-    "out": "Out",
-    "doubtful": "Doubt",
-    "doubt": "Doubt",
-    "suspended": "Suspended",
-    "il": "Out",
-    "injured": "Out",
-    "knock": "Doubt",
-    "illness": "Doubt",
+    "a": None,        # available — not injured, skip
+    "d": "Doubt",
+    "i": "Out",
+    "n": "Out",
+    "s": "Suspended",
+    "u": "Out",
+}
+
+# FPL team name → our short name
+TEAM_MAP = {
+    "Arsenal": "Arsenal",
+    "Aston Villa": "Aston Villa",
+    "Bournemouth": "Bournemouth",
+    "Brentford": "Brentford",
+    "Brighton": "Brighton",
+    "Chelsea": "Chelsea",
+    "Crystal Palace": "Crystal Palace",
+    "Everton": "Everton",
+    "Fulham": "Fulham",
+    "Ipswich": "Ipswich",
+    "Leicester": "Leicester",
+    "Liverpool": "Liverpool",
+    "Man City": "Man City",
+    "Man Utd": "Man Utd",
+    "Newcastle": "Newcastle",
+    "Nott'm Forest": "Nott'm Forest",
+    "Southampton": "Southampton",
+    "Spurs": "Spurs",
+    "West Ham": "West Ham",
+    "Wolves": "Wolves",
 }
 
 
-def _normalize_status(raw: str) -> str:
-    lower = raw.lower().strip()
-    for key, val in STATUS_MAP.items():
-        if key in lower:
-            return val
-    return raw.strip().title()
+async def scrape_injuries() -> tuple[list[dict], dict[int, int]]:
+    """
+    Fetch FPL bootstrap-static and return:
+      - injuries: list of injury dicts for non-available players
+      - fpl_id_map: {fpl_player_id: db_player_id} for match history scraper
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(FPL_URL)
+        resp.raise_for_status()
 
+    data = resp.json()
 
-async def scrape_injuries() -> list[dict]:
-    """Fetch and parse the injury table from premierinjuries.com."""
-    try:
-        async with httpx.AsyncClient(headers=HEADERS, timeout=30, follow_redirects=True) as client:
-            resp = await client.get(PREMIER_INJURIES_URL)
-            resp.raise_for_status()
-    except httpx.HTTPError as e:
-        logger.error(f"Failed to fetch injury page: {e}")
-        db.log_scrape("injuries", "error", str(e))
-        return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    # The main injury table — try multiple selectors for resilience
-    table = (
-        soup.find("table", {"id": "injurytable"})
-        or soup.find("table", class_=lambda c: c and "injury" in c.lower())
-        or soup.find("table")
-    )
-
-    if not table:
-        # Try parsing divs as a fallback if table layout changed
-        logger.warning("Injury table not found — trying div-based fallback")
-        return _parse_div_layout(soup)
+    # Build team id → clean name map
+    teams = {t["id"]: TEAM_MAP.get(t["name"], t["name"]) for t in data.get("teams", [])}
 
     injuries = []
-    rows = table.find_all("tr")
-    for row in rows[1:]:  # skip header
-        cells = row.find_all(["td", "th"])
-        if len(cells) < 4:
-            continue
+    fpl_name_to_id = {}  # "Mohamed Salah" → fpl_player_id
 
-        texts = [c.get_text(strip=True) for c in cells]
+    for p in data.get("elements", []):
+        full_name = f"{p.get('first_name', '')} {p.get('second_name', '')}".strip()
+        fpl_name_to_id[full_name.lower()] = p["id"]
 
-        # Layout varies; try to detect column order
-        # Common: Team | Player | Injury | Status | Return
-        team = texts[0] if len(texts) > 0 else ""
-        player_name = texts[1] if len(texts) > 1 else ""
-        injury_type = texts[2] if len(texts) > 2 else ""
-        status_raw = texts[3] if len(texts) > 3 else ""
-        expected_return = texts[4] if len(texts) > 4 else ""
+        status_code = p.get("status", "a")
+        status = STATUS_MAP.get(status_code)
+        if status is None:
+            continue  # player is available
 
-        if not player_name or not team:
-            continue
+        team = teams.get(p.get("team", 0), "Unknown")
+        news = p.get("news", "") or ""
+        chance = p.get("chance_of_playing_next_round")
+
+        return_str = (
+            f"{chance}% chance of playing"
+            if chance is not None
+            else "Unknown"
+        )
 
         injuries.append({
-            "team": team.strip(),
-            "player_name": player_name.strip(),
-            "injury_type": injury_type.strip(),
-            "status": _normalize_status(status_raw),
-            "expected_return": expected_return.strip(),
+            "team": team,
+            "player_name": full_name,
+            "injury_type": news[:150] if news else status_code.upper(),
+            "status": status,
+            "expected_return": return_str,
         })
 
-    logger.info(f"Scraped {len(injuries)} injury records")
-    return injuries
+    # Match FPL names to our DB player IDs
+    fpl_id_map: dict[int, int] = {}  # fpl_player_id → db_player_id
+    all_players = db.get_all_players_for_fpl_match()
+    for db_player in all_players:
+        db_name = db_player["name"].lower()
+        fpl_pid = fpl_name_to_id.get(db_name)
+        if fpl_pid:
+            db.update_player_fpl_id(db_player["id"], fpl_pid)
+            fpl_id_map[fpl_pid] = db_player["id"]
 
-
-def _parse_div_layout(soup: BeautifulSoup) -> list[dict]:
-    """Fallback: parse injury data from div-based layout."""
-    injuries = []
-    # Look for divs with player/injury class patterns
-    cards = soup.find_all("div", class_=lambda c: c and any(
-        kw in c.lower() for kw in ["player", "injury", "card"]
-    ))
-    for card in cards:
-        text = card.get_text(separator=" ", strip=True)
-        if len(text) < 10:
-            continue
-        # Minimal parse — just capture what we can
-        injuries.append({
-            "team": "",
-            "player_name": text[:50],
-            "injury_type": "Unknown",
-            "status": "Out",
-            "expected_return": "",
-        })
-    return injuries
+    logger.info(f"FPL: {len(injuries)} injuries, {len(fpl_id_map)} players matched to FPL IDs")
+    return injuries, fpl_id_map
 
 
 async def run_injury_scrape():
     """Entry point for scheduler."""
-    logger.info("Starting injury scrape…")
+    logger.info("Starting FPL injury scrape…")
     try:
-        injuries = await scrape_injuries()
+        injuries, _ = await scrape_injuries()
         if injuries:
             db.replace_injuries(injuries)
             db.log_scrape("injuries", "ok", f"{len(injuries)} records")
             logger.info(f"Injury scrape complete: {len(injuries)} records")
         else:
-            logger.warning("No injuries scraped — keeping stale data")
-            db.log_scrape("injuries", "warning", "0 records scraped")
+            logger.warning("No injuries scraped")
+            db.log_scrape("injuries", "warning", "0 records")
     except Exception as e:
         logger.error(f"Injury scrape failed: {e}")
         db.log_scrape("injuries", "error", str(e))
