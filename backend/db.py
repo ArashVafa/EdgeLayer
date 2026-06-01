@@ -165,6 +165,57 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS fpl_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            player_id INTEGER REFERENCES players(id) UNIQUE,
+            fpl_id INTEGER,
+            price REAL DEFAULT 0,
+            ownership_pct REAL DEFAULT 0,
+            transfers_in_event INTEGER DEFAULT 0,
+            transfers_out_event INTEGER DEFAULT 0,
+            transfers_in INTEGER DEFAULT 0,
+            transfers_out INTEGER DEFAULT 0,
+            total_points INTEGER DEFAULT 0,
+            form REAL DEFAULT 0,
+            points_per_game REAL DEFAULT 0,
+            goals_scored INTEGER DEFAULT 0,
+            assists INTEGER DEFAULT 0,
+            clean_sheets INTEGER DEFAULT 0,
+            goals_conceded INTEGER DEFAULT 0,
+            yellow_cards INTEGER DEFAULT 0,
+            red_cards INTEGER DEFAULT 0,
+            saves INTEGER DEFAULT 0,
+            bonus INTEGER DEFAULT 0,
+            bps INTEGER DEFAULT 0,
+            minutes INTEGER DEFAULT 0,
+            starts INTEGER DEFAULT 0,
+            expected_goals REAL DEFAULT 0,
+            expected_assists REAL DEFAULT 0,
+            expected_goal_involvements REAL DEFAULT 0,
+            influence REAL DEFAULT 0,
+            creativity REAL DEFAULT 0,
+            threat REAL DEFAULT 0,
+            ict_index REAL DEFAULT 0,
+            chance_of_playing_next_round INTEGER,
+            cost_change_start INTEGER DEFAULT 0,
+            element_type INTEGER DEFAULT 4,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS team_fdr (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fpl_team_id INTEGER UNIQUE,
+            team_name TEXT,
+            strength INTEGER DEFAULT 3,
+            strength_overall_home INTEGER DEFAULT 1000,
+            strength_overall_away INTEGER DEFAULT 1000,
+            strength_attack_home INTEGER DEFAULT 1000,
+            strength_attack_away INTEGER DEFAULT 1000,
+            strength_defence_home INTEGER DEFAULT 1000,
+            strength_defence_away INTEGER DEFAULT 1000,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
         CREATE INDEX IF NOT EXISTS idx_match_logs_player ON match_logs(player_id, date);
         CREATE INDEX IF NOT EXISTS idx_reports_cache_player ON reports_cache(player_id, created_at);
@@ -469,6 +520,83 @@ def save_report_cache(player_id: int, fixture_id: int, edge_score: int,
             player_id, fixture_id, edge_score, confidence, risk_level,
             json.dumps(dimensions), narrative_avg, narrative_agg, narrative_con
         ))
+
+
+# ── FPL Stats ─────────────────────────────────────────────────────────────────
+
+def upsert_fpl_stats(player_id: int, fpl_id: int, **kwargs):
+    with db_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM fpl_stats WHERE player_id=?", (player_id,)
+        ).fetchone()
+        fields = [
+            "price", "ownership_pct", "transfers_in_event", "transfers_out_event",
+            "transfers_in", "transfers_out", "total_points", "form", "points_per_game",
+            "goals_scored", "assists", "clean_sheets", "goals_conceded", "yellow_cards",
+            "red_cards", "saves", "bonus", "bps", "minutes", "starts",
+            "expected_goals", "expected_assists", "expected_goal_involvements",
+            "influence", "creativity", "threat", "ict_index",
+            "chance_of_playing_next_round", "cost_change_start", "element_type",
+        ]
+        values = [kwargs.get(f) for f in fields]
+        if existing:
+            set_clause = ", ".join(f"{f}=?" for f in fields)
+            conn.execute(
+                f"UPDATE fpl_stats SET fpl_id=?, {set_clause}, updated_at=CURRENT_TIMESTAMP WHERE player_id=?",
+                [fpl_id] + values + [player_id]
+            )
+        else:
+            cols = ", ".join(fields)
+            placeholders = ", ".join("?" for _ in fields)
+            conn.execute(
+                f"INSERT INTO fpl_stats (player_id, fpl_id, {cols}) VALUES (?, ?, {placeholders})",
+                [player_id, fpl_id] + values
+            )
+
+
+def get_fpl_stats(player_id: int):
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM fpl_stats WHERE player_id=?", (player_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ── Team FDR ──────────────────────────────────────────────────────────────────
+
+def upsert_team_fdr(fpl_team_id: int, team_name: str, **kwargs):
+    with db_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM team_fdr WHERE fpl_team_id=?", (fpl_team_id,)
+        ).fetchone()
+        fields = [
+            "strength", "strength_overall_home", "strength_overall_away",
+            "strength_attack_home", "strength_attack_away",
+            "strength_defence_home", "strength_defence_away",
+        ]
+        values = [kwargs.get(f, 1000) for f in fields]
+        if existing:
+            set_clause = ", ".join(f"{f}=?" for f in fields)
+            conn.execute(
+                f"UPDATE team_fdr SET team_name=?, {set_clause}, updated_at=CURRENT_TIMESTAMP WHERE fpl_team_id=?",
+                [team_name] + values + [fpl_team_id]
+            )
+        else:
+            cols = ", ".join(fields)
+            placeholders = ", ".join("?" for _ in fields)
+            conn.execute(
+                f"INSERT INTO team_fdr (fpl_team_id, team_name, {cols}) VALUES (?, ?, {placeholders})",
+                [fpl_team_id, team_name] + values
+            )
+
+
+def get_team_fdr(team_name: str):
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM team_fdr WHERE team_name=? OR team_name LIKE ?",
+            (team_name, f"%{team_name[:4]}%")
+        ).fetchone()
+    return dict(row) if row else None
 
 
 # ── Scrape Log ────────────────────────────────────────────────────────────────

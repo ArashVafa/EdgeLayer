@@ -61,6 +61,12 @@ def job_fpl_history():
     _run_async(run_fpl_history_scrape())
 
 
+def job_fpl_bootstrap():
+    logger.info("Scheduler: running FPL bootstrap scrape")
+    from scrapers.fpl_bootstrap import run_fpl_bootstrap_scrape
+    _run_async(run_fpl_bootstrap_scrape())
+
+
 def start_scheduler():
     """Register all jobs and start the scheduler."""
     # Understat: first run 30 min after startup to avoid hammering on every restart.
@@ -102,6 +108,14 @@ def start_scheduler():
         id="fpl_history",
         replace_existing=True,
         next_run_time=_now() + timedelta(minutes=5),  # 5min after startup, after injuries run
+    )
+
+    _scheduler.add_job(
+        job_fpl_bootstrap,
+        trigger=IntervalTrigger(hours=6),
+        id="fpl_bootstrap",
+        replace_existing=True,
+        next_run_time=_now() + timedelta(minutes=3),  # runs right after injuries
     )
 
     _scheduler.start()
