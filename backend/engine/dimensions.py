@@ -616,8 +616,7 @@ def dim_risk_indicators(
         # Use real FPL starts data when available
         starts = fpl_stats.get("starts", 0) or 0
         fpl_minutes = fpl_stats.get("minutes", 0) or 0
-        # Estimate GW played from minutes (rough: min 45 per game = played)
-        gw_played = max(fpl_minutes // 45, 1)
+        gw_played = max(max(starts, fpl_minutes // 90), 1)
         start_rate = starts / gw_played
         avg_mins = fpl_minutes / gw_played
 

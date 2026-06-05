@@ -9,6 +9,7 @@ import DimensionCard from './DimensionCard.jsx'
 import RiskIndicators from './RiskIndicators.jsx'
 import NarrativePanel from './NarrativePanel.jsx'
 import ChatPanel from './ChatPanel.jsx'
+import FplPanel from './FplPanel.jsx'
 
 const SECTION = ({ title, children }) => (
   <div style={{ marginBottom: 24 }}>
@@ -153,6 +154,13 @@ export default function Dashboard({ playerId, player, onBack }) {
 
       {/* Match Strip */}
       <MatchStrip fixture={report.fixture} playerTeam={p?.team} />
+
+      {/* FPL Intelligence */}
+      {report.fpl_analytics && Object.keys(report.fpl_analytics).length > 0 && (
+        <SECTION title="FPL Intelligence">
+          <FplPanel fplAnalytics={report.fpl_analytics} />
+        </SECTION>
+      )}
 
       {/* Key Metrics */}
       <MetricsGrid stats={report.stats} matchLogs={report.match_logs || []} />

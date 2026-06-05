@@ -202,6 +202,13 @@ def _format_cached_report(cached: dict, player: dict) -> dict:
     if cached.get("fixture_id"):
         fixture = db.get_fixture_by_id(cached["fixture_id"])
 
+    # fpl_analytics is not stored in cache — compute fresh every time
+    # (ownership/price/transfers change each gameweek)
+    from engine.scorer import _build_fpl_analytics
+    from engine.fpl_points import calculate_xfpl, captaincy_score, differential_score
+    fpl_stats = db.get_fpl_stats(player["id"])
+    fpl_analytics = _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differential_score)
+
     return {
         "player": player,
         "stats": db.get_player_stats(player["id"]),
@@ -216,6 +223,7 @@ def _format_cached_report(cached: dict, player: dict) -> dict:
             "aggressive": cached.get("narrative_agg", ""),
             "conservative": cached.get("narrative_con", ""),
         },
+        "fpl_analytics": fpl_analytics,
         "cached_at": cached.get("created_at"),
         "from_cache": True,
     }
