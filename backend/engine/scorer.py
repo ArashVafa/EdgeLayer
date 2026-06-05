@@ -201,7 +201,7 @@ def _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differentia
     xa = fpl_stats.get("expected_assists", 0) or 0
     minutes = fpl_stats.get("minutes", 0) or 0
     starts = fpl_stats.get("starts", 0) or 0
-    gw = max(minutes // 45, 1)  # rough games-played estimate
+    gw = max(max(starts, minutes // 90), 1)  # games played: prefer starts, fallback to mins/90
 
     xfpl_per_game = calculate_xfpl(
         element_type=element_type,
