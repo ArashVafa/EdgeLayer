@@ -207,7 +207,20 @@ def _format_cached_report(cached: dict, player: dict) -> dict:
     from engine.scorer import _build_fpl_analytics
     from engine.fpl_points import calculate_xfpl, captaincy_score, differential_score
     fpl_stats = db.get_fpl_stats(player["id"])
-    fpl_analytics = _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differential_score)
+    _match_logs = db.get_match_logs(player["id"], limit=10)
+    _stats_list = db.get_player_stats(player["id"])
+    _stats = (_stats_list[0] if isinstance(_stats_list, list) else _stats_list) or {}
+    # Determine opponent for fixture-adjusted form
+    _opponent, _ha = "", "H"
+    if fixture:
+        from engine.scorer import _fuzzy_team_match
+        _ha = "H" if _fuzzy_team_match(player.get("team", ""), fixture.get("home_team", "")) else "A"
+        _opponent = fixture["away_team"] if _ha == "H" else fixture["home_team"]
+    fpl_analytics = _build_fpl_analytics(
+        fpl_stats, calculate_xfpl, captaincy_score, differential_score,
+        stats=_stats, match_logs=_match_logs,
+        opponent_team=_opponent, home_away=_ha,
+    )
 
     return {
         "player": player,

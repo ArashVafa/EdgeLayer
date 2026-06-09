@@ -119,8 +119,17 @@ def build_report(player_id: int, fixture_id: int | None = None) -> dict:
     form_dots = _build_form_dots(match_logs[:5])
 
     # ── FPL analytics block ────────────────────────────────────────────────
+    # Determine home/away for fixture-adjusted form
+    _ha = "H"
+    if fixture:
+        _ha = "H" if _fuzzy_team_match(player.get("team", ""), fixture.get("home_team", "")) else "A"
+
     fpl_analytics = _build_fpl_analytics(
-        fpl_stats, calculate_xfpl, captaincy_score, differential_score
+        fpl_stats, calculate_xfpl, captaincy_score, differential_score,
+        stats=stats,
+        match_logs=match_logs,
+        opponent_team=opponent_team,
+        home_away=_ha,
     )
 
     report = {
@@ -191,25 +200,35 @@ def _build_form_dots(recent_logs: list) -> list:
     return dots
 
 
-def _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differential_score) -> dict:
+def _build_fpl_analytics(
+    fpl_stats,
+    calculate_xfpl,
+    captaincy_score,
+    differential_score,
+    stats: dict | None = None,
+    match_logs: list | None = None,
+    opponent_team: str = "",
+    home_away: str = "H",
+) -> dict:
     """Build the FPL-specific analytics block from fpl_stats row."""
     if not fpl_stats:
         return {}
+
+    from engine.fpl_points import (
+        rotation_risk_label, GOAL_PTS, CS_PTS,
+        form_index, fixture_adjusted_form,
+    )
 
     element_type = fpl_stats.get("element_type", 4)
     xg = fpl_stats.get("expected_goals", 0) or 0
     xa = fpl_stats.get("expected_assists", 0) or 0
     minutes = fpl_stats.get("minutes", 0) or 0
     starts = fpl_stats.get("starts", 0) or 0
-    gw = max(max(starts, minutes // 90), 1)  # games played: prefer starts, fallback to mins/90
+    gw = max(max(starts, minutes // 90), 1)
 
     xfpl_per_game = calculate_xfpl(
-        element_type=element_type,
-        xg=xg,
-        xa=xa,
-        minutes=minutes,
-        starts=starts,
-        total_gw_played=gw,
+        element_type=element_type, xg=xg, xa=xa,
+        minutes=minutes, starts=starts, total_gw_played=gw,
         clean_sheets=fpl_stats.get("clean_sheets", 0) or 0,
         goals_conceded=fpl_stats.get("goals_conceded", 0) or 0,
         yellow_cards=fpl_stats.get("yellow_cards", 0) or 0,
@@ -219,12 +238,8 @@ def _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differentia
     )
 
     cap_score = captaincy_score(
-        element_type=element_type,
-        xg=xg,
-        xa=xa,
-        minutes=minutes,
-        starts=starts,
-        total_gw_played=gw,
+        element_type=element_type, xg=xg, xa=xa,
+        minutes=minutes, starts=starts, total_gw_played=gw,
         clean_sheets=fpl_stats.get("clean_sheets", 0) or 0,
     )
 
@@ -234,14 +249,51 @@ def _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differentia
         form=fpl_stats.get("form", 0) or 0,
     )
 
-    from engine.fpl_points import rotation_risk_label, GOAL_PTS, CS_PTS
     avg_mins = minutes / gw if gw else 0
     rot_risk = rotation_risk_label(starts, gw, avg_mins)
+
+    # ── Availability metrics ──────────────────────────────────────────────
+    sub_appearances = max(0, gw - starts)
+    start_rate = starts / gw
+    predicted_minutes = round(start_rate * 87 + (1 - start_rate) * 0.35 * 22)
+
+    # ── Form Index (combined attacking metric) ────────────────────────────
+    s = stats or {}
+    fi = form_index(
+        xg=s.get("xG", xg) or xg,
+        xa=s.get("xA", xa) or xa,
+        sot=s.get("shots_on_target", 0) or 0,
+        key_passes=s.get("key_passes", 0) or 0,
+        minutes=s.get("minutes", minutes) or minutes,
+        appearances=s.get("appearances", gw) or gw,
+    )
+
+    # ── Fixture Adjusted Form ─────────────────────────────────────────────
+    faf = fi  # default: unadjusted (no fixture data)
+    if opponent_team:
+        opp_fdr = db.get_team_fdr(opponent_team)
+        if opp_fdr:
+            # When we're away, we face opponent's home defence; when home, their away defence
+            strength_key = "strength_defence_home" if home_away == "A" else "strength_defence_away"
+            opp_strength = opp_fdr.get(strength_key, 1100) or 1100
+            faf = fixture_adjusted_form(fi, opp_strength, home_away)
+
+    # ── Rolling windows from match logs ──────────────────────────────────
+    logs = match_logs or []
+    r3, r5, r10 = logs[:3], logs[:5], logs[:10]
+    xg_last3  = round(sum(m.get("xG", 0) for m in r3), 2)
+    xg_last5  = round(sum(m.get("xG", 0) for m in r5), 2)
+    xg_last10 = round(sum(m.get("xG", 0) for m in r10), 2)
+    xa_last3  = sum(m.get("assists", 0) for m in r3)   # assists as xA proxy
+    xa_last5  = sum(m.get("assists", 0) for m in r5)
+    xgi_last5 = sum(m.get("goals", 0) + m.get("assists", 0) for m in r5)
 
     return {
         "xfpl_per_game": xfpl_per_game,
         "captaincy_score": cap_score,
         "differential_score": diff_score,
+        "form_index": fi,
+        "fixture_adjusted_form": faf,
         "rotation_risk": rot_risk,
         "ownership_pct": round(fpl_stats.get("ownership_pct", 0) or 0, 1),
         "price": round(fpl_stats.get("price", 0) or 0, 1),
@@ -254,10 +306,18 @@ def _build_fpl_analytics(fpl_stats, calculate_xfpl, captaincy_score, differentia
         "threat": round(fpl_stats.get("threat", 0) or 0, 1),
         "xGI": round(fpl_stats.get("expected_goal_involvements", 0) or 0, 2),
         "starts": starts,
+        "sub_appearances": sub_appearances,
+        "predicted_minutes": predicted_minutes,
         "goal_pts_value": GOAL_PTS.get(element_type, 4),
         "cs_pts_value": CS_PTS.get(element_type, 0),
         "transfers_in_event": fpl_stats.get("transfers_in_event", 0) or 0,
         "transfers_out_event": fpl_stats.get("transfers_out_event", 0) or 0,
+        "xg_last3": xg_last3,
+        "xg_last5": xg_last5,
+        "xg_last10": xg_last10,
+        "xa_last3": xa_last3,
+        "xa_last5": xa_last5,
+        "xgi_last5": xgi_last5,
     }
 
 

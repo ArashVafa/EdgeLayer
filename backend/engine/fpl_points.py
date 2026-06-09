@@ -151,3 +151,41 @@ def rotation_risk_label(starts: int, total_gw: int, avg_minutes: float) -> str:
     if start_rate >= 0.65 or avg_minutes >= 60:
         return "MEDIUM"
     return "HIGH"
+
+
+def form_index(
+    xg: float,
+    xa: float,
+    sot: int,
+    key_passes: int,
+    minutes: int,
+    appearances: int,
+) -> float:
+    """
+    Combined form index 0–100.
+    Weights: xG/90 (35%), xA/90 (25%), SOT/90 (20%), KeyPasses/90 (15%), minutes availability (5%).
+    Elite benchmarks: xG/90=0.7, xA/90=0.5, SOT/90=2.0, KP/90=2.5.
+    """
+    if minutes <= 0:
+        return 0.0
+    xg_90 = min(1.0, (xg / minutes) * 90 / 0.7)
+    xa_90 = min(1.0, (xa / minutes) * 90 / 0.5)
+    sot_90 = min(1.0, (sot / minutes) * 90 / 2.0)
+    kp_90 = min(1.0, (key_passes / minutes) * 90 / 2.5)
+    avail = min(1.0, minutes / max(appearances * 90, 1))
+    score = (xg_90 * 0.35 + xa_90 * 0.25 + sot_90 * 0.20 + kp_90 * 0.15 + avail * 0.05) * 100
+    return round(score, 1)
+
+
+def fixture_adjusted_form(form_score: float, opponent_strength_defence: int, home_away: str = "H") -> float:
+    """
+    Scale form score by how easy/hard the upcoming fixture is.
+    opponent_strength_defence: FPL team strength value (typical range 900–1400, mean ~1100).
+    Higher = stronger defence = harder to score against.
+    home_away: 'H' if player is at home, 'A' if away.
+    """
+    mean = 1100
+    difficulty_ratio = (opponent_strength_defence or mean) / mean
+    ease_modifier = 1.0 + (1.0 - difficulty_ratio) * 0.25
+    adjusted = form_score * max(0.5, min(1.5, ease_modifier))
+    return round(min(100.0, max(0.0, adjusted)), 1)

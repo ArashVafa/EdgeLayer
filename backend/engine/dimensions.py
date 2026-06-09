@@ -70,11 +70,14 @@ def dim_player_form(stats: dict, match_logs: list[dict], fpl_stats: dict | None 
 
     goals_last3 = sum(m.get("goals", 0) for m in recent_3)
     goals_last5 = sum(m.get("goals", 0) for m in recent_5)
+    assists_last3 = sum(m.get("assists", 0) for m in recent_3)
     assists_last5 = sum(m.get("assists", 0) for m in recent_5)
     shots_last5 = sum(m.get("shots", 0) for m in recent_5)
     xg_last3 = sum(m.get("xG", 0) for m in recent_3)
     xg_last5 = sum(m.get("xG", 0) for m in recent_5)
     xg_last10 = sum(m.get("xG", 0) for m in recent_10)
+    # xGI proxy = goals + assists per match (real xA not stored per-match)
+    xgi_last5 = goals_last5 + assists_last5
 
     form_score = 50
     form_score += goals_last3 * 10
@@ -133,7 +136,7 @@ def dim_player_form(stats: dict, match_logs: list[dict], fpl_stats: dict | None 
     analysis_parts = [
         f"Season: {goals}G {stats.get('assists',0)}A in {apps} apps.",
         f"Goals/90: {goals_90:.2f}. xG: {xg:.1f} (delta: {xg_delta:+.1f}).",
-        f"Last 3: {goals_last3}G ({xg_last3:.2f} xG). Last 5: {goals_last5}G {assists_last5}A ({xg_last5:.2f} xG). Last 10 xG: {xg_last10:.2f}.",
+        f"Last 3: {goals_last3}G {assists_last3}A ({xg_last3:.2f} xG). Last 5: {goals_last5}G {assists_last5}A xGI:{xgi_last5} ({xg_last5:.2f} xG). Last 10 xG: {xg_last10:.2f}.",
     ]
     if "hot_streak" in flags:
         analysis_parts.append(f"Hot streak — {goals_last3}G in last 3.")
@@ -151,7 +154,9 @@ def dim_player_form(stats: dict, match_logs: list[dict], fpl_stats: dict | None 
             "xg_delta": round(xg_delta, 2),
             "goals_last3": goals_last3,
             "goals_last5": goals_last5,
+            "assists_last3": assists_last3,
             "assists_last5": assists_last5,
+            "xgi_last5": xgi_last5,
             "shots_last5": shots_last5,
             "xg_last3": round(xg_last3, 2),
             "xg_last5": round(xg_last5, 2),
