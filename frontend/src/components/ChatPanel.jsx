@@ -15,7 +15,9 @@ export default function ChatPanel({ playerId, playerName }) {
   const bottomRef = useRef(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (history.length > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [history, loading])
 
   const send = async (text) => {

@@ -25,6 +25,7 @@ export default function Dashboard({ playerId, player, onBack }) {
   const [refreshing, setRefreshing] = useState(false)
 
   useEffect(() => {
+    window.scrollTo(0, 0)
     setLoading(true)
     setError(null)
     getReport(playerId)
