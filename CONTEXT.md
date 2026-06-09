@@ -1,6 +1,6 @@
 # EdgeLayer — Project Context
 
-> Updated: April 2026. If the chat breaks, resume from this file.
+> Updated: June 2026. If the chat breaks, resume from this file.
 
 ---
 
@@ -73,10 +73,16 @@ RESEND_API_KEY=...                           # optional, for forgot-password ema
 
 | Source | Data | Frequency | Status |
 |---|---|---|---|
-| understat.com | Player stats, xG, assists, shots | Every 6h | ✅ Live (POST API) |
+| understat.com | Player stats, xG, assists, shots, key_passes | Every 6h | ✅ Live (POST API) |
+| FPL bootstrap-static API | Ownership, price, ICT, starts, transfers, clean sheets, saves, bonus, element_type, team FDR | Every 6h | ✅ Live |
 | premierinjuries.com | Injury table | Every 2h | ❌ Blocked on Render IPs |
 | football-data.org | Fixtures & results | Daily | ✅ Live (needs free API key) |
 | the-odds-api.com | Betting lines | 30min matchday / 4h otherwise | ⚙️ Ready (needs API key) |
+
+### FPL Bootstrap data available per player
+`fpl_stats` table: ownership_pct, price, form, points_per_game, total_points, ict_index, influence, creativity, threat, expected_goals (xG), expected_assists (xA), expected_goal_involvements (xGI), minutes, starts, clean_sheets, goals_conceded, yellow_cards, red_cards, saves, bonus, element_type (1=GK/2=DEF/3=MID/4=FWD), transfers_in_event, transfers_out_event, chance_of_playing_next_round
+
+`team_fdr` table: strength_overall_home/away, strength_attack_home/away, strength_defence_home/away — all 20 PL teams
 
 ### Important: What is real vs synthetic
 - **Player season stats** (xG, goals, assists, shots, minutes): **REAL** — scraped from Understat POST API every 6h. Currently 589 players.
@@ -105,7 +111,7 @@ POST /api/report/{player_id}/refresh       Background regeneration
 GET  /api/fixtures?team={team}             Upcoming fixtures
 GET  /api/health                           DB counts + last scrape timestamps
 POST /api/chat/{player_id}                 Player chatbot (body: {message, history[]})
-POST /api/admin/scrape/{source}            Manual scrape trigger (understat/injuries/fixtures/odds)
+POST /api/admin/scrape/{source}            Manual scrape trigger (understat/injuries/fixtures/odds/fpl_history/fpl_bootstrap)
 POST /api/admin/reseed-fixtures            Replace fixtures with seed data (fallback)
 ```
 
@@ -140,7 +146,7 @@ Single `chat_complete()` function used by both narratives and chatbot:
 
 ## Database Schema
 
-Tables: `players`, `player_stats`, `match_logs`, `injuries`, `fixtures`, `odds`, `reports_cache`, `scrape_log`, `llm_log`, `llm_feedback`, `users`, `password_reset_tokens`
+Tables: `players`, `player_stats`, `match_logs`, `injuries`, `fixtures`, `odds`, `reports_cache`, `scrape_log`, `llm_log`, `llm_feedback`, `users`, `password_reset_tokens`, `fpl_stats`, `team_fdr`
 
 ### New tables added (April 2026)
 ```sql
@@ -149,6 +155,18 @@ llm_log       — every LLM call: provider, model, use_case, player_id, user_mes
 llm_feedback  — thumbs up/down ratings on LLM outputs (for future fine-tuning)
 users         — auth table (email, hashed_password) — built but currently disabled
 password_reset_tokens — time-limited reset tokens for forgot-password flow
+```
+
+### New tables added (June 2026)
+```sql
+fpl_stats     — per-player FPL data: ownership_pct, price, form, points_per_game,
+                total_points, ict_index, influence, creativity, threat,
+                expected_goals, expected_assists, expected_goal_involvements,
+                minutes, starts, clean_sheets, goals_conceded, yellow_cards,
+                red_cards, saves, bonus, element_type (1=GK/2=DEF/3=MID/4=FWD),
+                transfers_in_event, transfers_out_event, chance_of_playing_next_round
+team_fdr      — FPL team strength ratings: strength_overall/attack/defence home/away
+                for all 20 PL teams — used for Fixture Adjusted Form calculation
 ```
 
 ### Training data strategy
@@ -171,24 +189,28 @@ EdgeLayer/
 ├── CONTEXT.md                      ← this file
 ├── render.yaml                     ← Render deploy config
 ├── design-reference.html           ← HTML prototype (original design target)
+├── feebacks/                       ← feedback docs (All Indexes .docx, Rules and Points.docx)
 ├── backend/
 │   ├── main.py                     ← FastAPI app, all routes, lifespan (auto-seed)
 │   ├── config.py                   ← all env vars + constants
-│   ├── db.py                       ← SQLite schema + all CRUD helpers
+│   ├── db.py                       ← SQLite schema + all CRUD helpers (incl. fpl_stats, team_fdr)
 │   ├── auth.py                     ← JWT auth router (built, currently disabled)
-│   ├── scheduler.py                ← APScheduler jobs (all 4 scrapers)
+│   ├── scheduler.py                ← APScheduler jobs (5 scrapers incl. fpl_bootstrap every 6h)
 │   ├── seed.py                     ← 31 hardcoded players + GW36-38 fixtures fallback
 │   ├── .python-version             ← 3.11.9 (prevents Render using Python 3.14)
 │   ├── requirements.txt
 │   ├── scrapers/
 │   │   ├── understat.py            ← POST API, 3x retry+backoff, sync+async variants
+│   │   ├── fpl_bootstrap.py        ← FPL bootstrap-static API → fpl_stats + team_fdr tables
+│   │   ├── fpl_history.py          ← FPL per-player history (GW-level)
 │   │   ├── injuries.py             ← premierinjuries.com (full browser HEADERS)
 │   │   ├── fixtures.py             ← football-data.org free API
 │   │   └── odds.py                 ← the-odds-api.com
 │   └── engine/
 │       ├── llm.py                  ← unified LLM wrapper (Groq + Anthropic)
-│       ├── dimensions.py           ← 13 dimension scoring functions
-│       ├── scorer.py               ← Edge Score aggregation + report builder
+│       ├── dimensions.py           ← 13 dimension scoring functions (use fpl_stats for risk/market/form)
+│       ├── scorer.py               ← Edge Score aggregation + report builder + _build_fpl_analytics()
+│       ├── fpl_points.py           ← xFPL calc, captaincy/differential/rotation/form_index/fixture_adj_form
 │       ├── narrative.py            ← 3-mode narrative generation via LLM
 │       └── chatbot.py              ← player Q&A chatbot via LLM
 └── frontend/
@@ -207,8 +229,9 @@ EdgeLayer/
         │   └── ResetPasswordPage.jsx
         └── components/
             ├── PlayerSearch.jsx
-            ├── Dashboard.jsx        ← full report page, includes ChatPanel
-            ├── ChatPanel.jsx        ← player chatbot UI
+            ├── Dashboard.jsx        ← full report page; scrolls to top on player change
+            ├── ChatPanel.jsx        ← player chatbot UI; only auto-scrolls when messages exist
+            ├── FplPanel.jsx         ← FPL Intelligence section (6 sub-sections, see below)
             ├── EdgeScore.jsx
             ├── MatchStrip.jsx
             ├── MetricsGrid.jsx
@@ -252,6 +275,72 @@ Full JWT auth was built and then disabled to simplify sharing:
 
 ---
 
+## FPL Intelligence Panel (FplPanel.jsx)
+
+Sits between MatchStrip and MetricsGrid on the Dashboard. Six sections:
+1. **Headline indexes** — xFPL/game, Captaincy Score (/100), Differential Score (/100) with progress bars
+2. **Form indexes** — Form Index (/100), Fixture Adjusted Form (/100) with delta vs raw
+3. **Availability & Rotation** — Ownership %, Price, Starts/sub apps, Predicted Minutes, Rotation Risk (LOW/MED/HIGH)
+4. **Rolling form windows** — xG Last 3/5/10, xA Last 3/5, xGI Last 5 with mini bar charts
+5. **ICT Index** — Overall ICT, Influence, Creativity, Threat bars
+6. **Season stats + GW transfers + Scoring rules** — Total pts, Pts/game, FPL form, Season xGI; Transfers In/Out/Net; Goal/Assist/CS/Card rule chips
+
+### FPL scoring rules implemented in `engine/fpl_points.py`
+- Goal pts by position: GK=10, DEF=6, MID=5, FWD=4
+- Assist: 3pts all positions
+- Clean sheet: GK/DEF=4, MID=1, FWD=0
+- Play <60min: 1pt, 60+: 2pts
+- Every 3 saves (GK): 1pt
+- Every 2 goals conceded (GK/DEF): −1pt
+- Yellow: −1, Red: −3
+- Bonus: stored from FPL bootstrap, divided per-game
+- **Not implemented** (no data): Penalty miss −2, Own goal −2, CBIT defensive contributions +2
+
+### FPL analytics computed fresh every response (not cached)
+`_build_fpl_analytics()` in `scorer.py` runs on both live and cached reports because
+ownership/price/transfers change each gameweek — only the edge score & narratives are cached.
+
+---
+
+## Feedback Implementation Status (`feebacks/` directory)
+
+Two feedback files were reviewed (June 2026): "All Indexes .docx" and "Rules and Points.docx".
+
+### ✅ Implemented
+- xFPL per game (custom expected fantasy points model)
+- Form Index 0-100 (xG/90 35% + xA/90 25% + SOT/90 20% + KeyPass/90 15% + availability 5%)
+- Fixture Adjusted Form (form × opponent defence FDR modifier ±25%)
+- Captaincy Score 0-100 (2× xFPL scaled to 20pt ceiling)
+- Differential Score 0-100 (low ownership × high xFPL × form)
+- Rotation Risk label (LOW/MEDIUM/HIGH from starts/avg-mins)
+- xG rolling windows: Last 3, Last 5, Last 10
+- xA rolling windows: Last 3, Last 5 (using assists as proxy)
+- xGI Last 5 (goals + assists), Season xGI
+- Sub appearances, Predicted minutes
+- Ownership %, Transfers In/Out/Net this GW
+- ICT Index, Influence, Creativity, Threat
+- Full FPL scoring rules in xFPL calc (goal pts by position, CS, saves, conceded, cards, bonus)
+- FDR table (all 20 teams, attack/defence strength home/away)
+- Suspension risk flag (one yellow from suspension)
+- Injury status / doubt flag (chance_of_playing_next_round)
+- Scoring rule chips displayed in UI
+
+### ❌ Not yet implemented (needs new data sources)
+- xG/90, xA/90, xGI/90 displayed as standalone stats
+- NPxG (non-penalty xG)
+- Shots Inside/Outside Box, Big Chances, BCM, Shot Conversion
+- Big Chances Created, Through Balls, Crosses, Progressive Passes
+- CBIT (Clearances/Blocks/Interceptions/Tackles) — needed for defensive contribution +2pts scoring
+- GK: Save %, Penalty Saves, Goals Prevented, xGOT
+- Team-level: xGA, Team xG, Team CS %, Shots Conceded
+- Home vs Away splits
+- Effective Ownership (EO = ownership + captaincy % + TC%)
+- Top 10k ownership
+- Price history / Price rise/fall %
+- Own goal and penalty miss deductions in xFPL (no data)
+
+---
+
 ## Planned Next Features
 
 ### 1. Probability Engine
@@ -273,6 +362,10 @@ Full JWT auth was built and then disabled to simplify sharing:
 - Host via Together AI fine-tuning or self-hosted
 
 ---
+
+## UI Behaviour Notes
+- **Page scroll**: Dashboard scrolls to top when a new player is selected (`window.scrollTo(0,0)` in `Dashboard.jsx` useEffect)
+- **Chat scroll**: ChatPanel only auto-scrolls to bottom when there are messages — does NOT scroll on initial render (fixed June 2026)
 
 ## Known Issues / Gotchas
 - **Match logs are synthetic** — per-game data doesn't exist from Understat anymore
