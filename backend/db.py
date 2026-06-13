@@ -217,6 +217,19 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS fpl_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gameweek INTEGER UNIQUE,
+            most_captained_fpl_id INTEGER,
+            most_captained_name TEXT,
+            most_transferred_in_fpl_id INTEGER,
+            most_transferred_in_name TEXT,
+            top_element_fpl_id INTEGER,
+            average_entry_score REAL,
+            chip_plays_json TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_players_name ON players(name);
         CREATE INDEX IF NOT EXISTS idx_match_logs_player ON match_logs(player_id, date);
         CREATE INDEX IF NOT EXISTS idx_reports_cache_player ON reports_cache(player_id, created_at);
@@ -231,6 +244,21 @@ def init_db():
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_players_fpl ON players(fpl_id)"
         )
+
+    # Safe migrations: add new fpl_stats columns from bootstrap expansion
+    _fpl_stats_migrations = [
+        ("value_form",   "REAL DEFAULT 0"),
+        ("value_season", "REAL DEFAULT 0"),
+        ("ep_next",      "REAL DEFAULT 0"),
+        ("news",         "TEXT"),
+        ("news_added",   "TEXT"),
+    ]
+    for col, coldef in _fpl_stats_migrations:
+        with db_conn() as conn:
+            try:
+                conn.execute(f"ALTER TABLE fpl_stats ADD COLUMN {col} {coldef}")
+            except Exception:
+                pass  # column already exists
 
 
 # ── Players ──────────────────────────────────────────────────────────────────
@@ -538,6 +566,7 @@ def upsert_fpl_stats(player_id: int, fpl_id: int, **kwargs):
             "expected_goals", "expected_assists", "expected_goal_involvements",
             "influence", "creativity", "threat", "ict_index",
             "chance_of_playing_next_round", "cost_change_start", "element_type",
+            "value_form", "value_season", "ep_next", "news", "news_added",
         ]
         values = [kwargs.get(f) for f in fields]
         if existing:
@@ -561,6 +590,92 @@ def get_fpl_stats(player_id: int):
             "SELECT * FROM fpl_stats WHERE player_id=?", (player_id,)
         ).fetchone()
     return dict(row) if row else None
+
+
+def get_all_players_with_fpl_stats():
+    """Bulk join for the gameweek planner — one query, no per-player round-trips."""
+    with db_conn() as conn:
+        rows = conn.execute("""
+            SELECT
+                p.id, p.name, p.team, p.position, p.fpl_id,
+                fs.price, fs.ownership_pct, fs.element_type,
+                fs.expected_goals, fs.expected_assists, fs.expected_goal_involvements,
+                fs.minutes, fs.starts, fs.clean_sheets, fs.goals_conceded,
+                fs.yellow_cards, fs.red_cards, fs.saves, fs.bonus,
+                fs.form, fs.points_per_game, fs.total_points,
+                fs.transfers_in_event, fs.transfers_out_event,
+                fs.chance_of_playing_next_round, fs.ep_next,
+                fs.news, fs.ict_index,
+                COALESCE(ps.shots_on_target, 0) AS shots_on_target,
+                COALESCE(ps.key_passes, 0) AS key_passes
+            FROM players p
+            JOIN fpl_stats fs ON fs.player_id = p.id
+            LEFT JOIN player_stats ps ON ps.player_id = p.id
+            WHERE fs.minutes > 0
+            ORDER BY fs.total_points DESC
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_team_fdr_list():
+    """Return all team FDR rows as a list of dicts."""
+    with db_conn() as conn:
+        rows = conn.execute("SELECT * FROM team_fdr").fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── FPL Events ────────────────────────────────────────────────────────────────
+
+def upsert_fpl_event(
+    gameweek: int,
+    most_captained_fpl_id: int | None,
+    most_captained_name: str | None,
+    most_transferred_in_fpl_id: int | None,
+    most_transferred_in_name: str | None,
+    top_element_fpl_id: int | None,
+    average_entry_score: float | None,
+    chip_plays_json: str | None,
+):
+    with db_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM fpl_events WHERE gameweek=?", (gameweek,)
+        ).fetchone()
+        if existing:
+            conn.execute("""
+                UPDATE fpl_events SET
+                    most_captained_fpl_id=?, most_captained_name=?,
+                    most_transferred_in_fpl_id=?, most_transferred_in_name=?,
+                    top_element_fpl_id=?, average_entry_score=?,
+                    chip_plays_json=?, updated_at=CURRENT_TIMESTAMP
+                WHERE gameweek=?
+            """, (
+                most_captained_fpl_id, most_captained_name,
+                most_transferred_in_fpl_id, most_transferred_in_name,
+                top_element_fpl_id, average_entry_score,
+                chip_plays_json, gameweek,
+            ))
+        else:
+            conn.execute("""
+                INSERT INTO fpl_events
+                    (gameweek, most_captained_fpl_id, most_captained_name,
+                     most_transferred_in_fpl_id, most_transferred_in_name,
+                     top_element_fpl_id, average_entry_score, chip_plays_json)
+                VALUES (?,?,?,?,?,?,?,?)
+            """, (
+                gameweek, most_captained_fpl_id, most_captained_name,
+                most_transferred_in_fpl_id, most_transferred_in_name,
+                top_element_fpl_id, average_entry_score, chip_plays_json,
+            ))
+
+
+def get_current_most_captained() -> int | None:
+    """Return the most_captained_fpl_id from the most recently stored event."""
+    with db_conn() as conn:
+        row = conn.execute("""
+            SELECT most_captained_fpl_id FROM fpl_events
+            ORDER BY gameweek DESC LIMIT 1
+        """).fetchone()
+    return row["most_captained_fpl_id"] if row else None
 
 
 # ── Team FDR ──────────────────────────────────────────────────────────────────

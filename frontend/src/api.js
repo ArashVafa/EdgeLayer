@@ -31,6 +31,12 @@ export const refreshReport = (id) =>
 export const getFixtures = (team, limit = 20) =>
   api.get('/api/fixtures', { params: { team, limit } }).then(r => r.data)
 
+export const comparePlayers = (ids, gws = 3, hit = 0) =>
+  api.get('/api/compare', { params: { players: ids.join(','), gws, hit } }).then(r => r.data)
+
+export const getGameweekPlanner = (params = {}) =>
+  api.get('/api/gameweek-planner', { params }).then(r => r.data)
+
 export const getHealth = () =>
   api.get('/api/health').then(r => r.data)
 

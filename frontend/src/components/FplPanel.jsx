@@ -4,13 +4,15 @@ export default function FplPanel({ fplAnalytics }) {
   const {
     xfpl_per_game, captaincy_score, differential_score,
     form_index, fixture_adjusted_form,
-    rotation_risk, ownership_pct, price, form, points_per_game, total_points,
+    rotation_risk, ownership_pct, estimated_eo, is_most_captained,
+    price, form, points_per_game, total_points,
     ict_index, influence, creativity, threat,
     xGI, starts, sub_appearances, predicted_minutes,
     goal_pts_value, cs_pts_value,
     transfers_in_event, transfers_out_event,
     xg_last3, xg_last5, xg_last10,
     xa_last3, xa_last5, xgi_last5,
+    news, chance_of_playing_next_round,
   } = fplAnalytics
 
   const net = (transfers_in_event || 0) - (transfers_out_event || 0)
@@ -82,12 +84,43 @@ export default function FplPanel({ fplAnalytics }) {
 
       <div style={{ borderTop: '1px solid var(--border)' }} />
 
+      {/* ── FPL News / Availability ── */}
+      {(news || (chance_of_playing_next_round != null && chance_of_playing_next_round < 100)) && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, fontSize: 12, lineHeight: 1.5,
+          background: chance_of_playing_next_round != null && chance_of_playing_next_round < 75
+            ? 'rgba(239,68,68,0.07)' : 'rgba(245,158,11,0.07)',
+          border: `1px solid ${chance_of_playing_next_round != null && chance_of_playing_next_round < 75
+            ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`,
+          color: chance_of_playing_next_round != null && chance_of_playing_next_round < 75
+            ? 'var(--red)' : 'var(--amber)',
+          display: 'flex', gap: 10, alignItems: 'flex-start',
+        }}>
+          <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, flexShrink: 0 }}>
+            {chance_of_playing_next_round != null ? `${chance_of_playing_next_round}%` : 'NEWS'}
+          </span>
+          <span>{news || `${chance_of_playing_next_round}% chance of playing next round`}</span>
+        </div>
+      )}
+
       {/* ── Row 3: Availability ── */}
       <div>
         <SectionLabel>Availability & Rotation</SectionLabel>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
-          <StatTile label="Ownership" value={`${ownership_pct?.toFixed(1)}%`} sub="selected by" />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+          <StatTile
+            label="Ownership"
+            value={`${ownership_pct?.toFixed(1)}%`}
+            sub="selected by"
+          />
+          <StatTile
+            label="EO (estimated)"
+            value={estimated_eo != null ? `${estimated_eo}%` : '—'}
+            sub={is_most_captained ? 'most captained this GW' : 'ownership + cap. est.'}
+            tooltip="Estimated Effective Ownership. Captaincy portion approximated — FPL does not publish live captaincy %."
+          />
           <StatTile label="Price" value={`£${price?.toFixed(1)}m`} sub="FPL value" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           <StatTile label="Starts" value={starts} sub={`${sub_appearances} sub apps`} />
           <StatTile label="Pred. Minutes" value={predicted_minutes} sub="per game" />
           <StatTile label="Rotation Risk" value={rotation_risk || '—'} sub="from starts data" valueColor={rotColor} />
@@ -214,11 +247,11 @@ function IndexCard({ label, value, unit, sub, color, bar, barColor }) {
   )
 }
 
-function StatTile({ label, value, sub, valueColor }) {
+function StatTile({ label, value, sub, valueColor, tooltip }) {
   return (
-    <div style={{
+    <div title={tooltip} style={{
       background: 'var(--surface-2)', borderRadius: 10, padding: '12px 14px',
-      border: '1px solid var(--border)',
+      border: '1px solid var(--border)', cursor: tooltip ? 'help' : 'default',
     }}>
       <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
       <div style={{ fontFamily: 'var(--mono)', fontSize: 17, fontWeight: 700, color: valueColor || 'var(--text)' }}>

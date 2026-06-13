@@ -3,6 +3,7 @@ FPL bootstrap scraper — pulls comprehensive player stats and team FDR from FPL
 Also updates fpl_id mappings on player rows (same endpoint as injuries.py,
 but stores the full data payload rather than just injury status).
 """
+import json
 import logging
 
 import httpx
@@ -42,6 +43,14 @@ async def run_fpl_bootstrap_scrape():
                 strength_defence_home=t.get("strength_defence_home", 1000),
                 strength_defence_away=t.get("strength_defence_away", 1000),
             )
+
+        # Build FPL-id → name lookup for event data (most_captained, etc.)
+        fpl_id_to_name: dict[int, str] = {}
+        for p in data.get("elements", []):
+            fpl_id_to_name[p["id"]] = f"{p.get('first_name', '')} {p.get('second_name', '')}".strip()
+
+        # Process GW events array — find current/next GW for captaincy data
+        _process_events(data.get("events", []), fpl_id_to_name)
 
         # Match FPL player names to our DB player rows
         all_db_players = db.get_all_players_for_fpl_match()
@@ -96,6 +105,12 @@ async def run_fpl_bootstrap_scrape():
                 chance_of_playing_next_round=p.get("chance_of_playing_next_round"),
                 cost_change_start=p.get("cost_change_start", 0),
                 element_type=p.get("element_type", 4),
+                # Newly extracted fields
+                value_form=_f("value_form"),
+                value_season=_f("value_season"),
+                ep_next=_f("ep_next"),
+                news=p.get("news") or None,
+                news_added=p.get("news_added") or None,
             )
             count += 1
 
@@ -106,3 +121,49 @@ async def run_fpl_bootstrap_scrape():
     except Exception as e:
         logger.error(f"FPL bootstrap scrape failed: {e}")
         db.log_scrape("fpl_bootstrap", "error", str(e))
+
+
+def _process_events(events: list, fpl_id_to_name: dict):
+    """
+    Extract captaincy and transfer data from the events array.
+    Stores the current/upcoming GW in fpl_events for EO estimation.
+    """
+    if not events:
+        return
+
+    # Prefer the current GW; fall back to the next one
+    target_event = None
+    for ev in events:
+        if ev.get("is_current"):
+            target_event = ev
+            break
+    if not target_event:
+        for ev in events:
+            if ev.get("is_next"):
+                target_event = ev
+                break
+    if not target_event and events:
+        # Last event in the list (most recent)
+        target_event = events[-1]
+
+    if not target_event:
+        return
+
+    gw = target_event.get("id")
+    most_captained_fpl_id = target_event.get("most_captained")
+    most_transferred_in_fpl_id = target_event.get("most_transferred_in")
+    top_element_fpl_id = target_event.get("top_element")
+    average_entry_score = target_event.get("average_entry_score")
+    chip_plays = target_event.get("chip_plays", [])
+
+    db.upsert_fpl_event(
+        gameweek=gw,
+        most_captained_fpl_id=most_captained_fpl_id,
+        most_captained_name=fpl_id_to_name.get(most_captained_fpl_id) if most_captained_fpl_id else None,
+        most_transferred_in_fpl_id=most_transferred_in_fpl_id,
+        most_transferred_in_name=fpl_id_to_name.get(most_transferred_in_fpl_id) if most_transferred_in_fpl_id else None,
+        top_element_fpl_id=top_element_fpl_id,
+        average_entry_score=average_entry_score,
+        chip_plays_json=json.dumps(chip_plays) if chip_plays else None,
+    )
+    logger.info(f"FPL event GW{gw} stored: most_captained={fpl_id_to_name.get(most_captained_fpl_id, most_captained_fpl_id)}")

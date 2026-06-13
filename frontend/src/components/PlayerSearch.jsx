@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { searchPlayers } from '../api.js'
 
-export default function PlayerSearch({ onSelect }) {
+export default function PlayerSearch({ onSelect, placeholder }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -59,7 +59,7 @@ export default function PlayerSearch({ onSelect }) {
           value={query}
           onChange={e => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
-          placeholder="Search player name… (e.g. Haaland, Salah, Saka)"
+          placeholder={placeholder || "Search player name… (e.g. Haaland, Salah, Saka)"}
           style={{
             width: '100%',
             background: 'transparent',

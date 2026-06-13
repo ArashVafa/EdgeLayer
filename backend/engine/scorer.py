@@ -216,7 +216,7 @@ def _build_fpl_analytics(
 
     from engine.fpl_points import (
         rotation_risk_label, GOAL_PTS, CS_PTS,
-        form_index, fixture_adjusted_form,
+        form_index, fixture_adjusted_form, estimate_eo,
     )
 
     element_type = fpl_stats.get("element_type", 4)
@@ -288,6 +288,15 @@ def _build_fpl_analytics(
     xa_last5  = sum(m.get("assists", 0) for m in r5)
     xgi_last5 = sum(m.get("goals", 0) + m.get("assists", 0) for m in r5)
 
+    _ownership_pct = round(fpl_stats.get("ownership_pct", 0) or 0, 1)
+    _price = round(fpl_stats.get("price", 0) or 0, 1)
+    _most_captained_fpl_id = db.get_current_most_captained()
+    _is_mc = (
+        _most_captained_fpl_id is not None
+        and fpl_stats.get("fpl_id") == _most_captained_fpl_id
+    )
+    _eo = estimate_eo(_ownership_pct, element_type, _price, _is_mc)
+
     return {
         "xfpl_per_game": xfpl_per_game,
         "captaincy_score": cap_score,
@@ -295,8 +304,10 @@ def _build_fpl_analytics(
         "form_index": fi,
         "fixture_adjusted_form": faf,
         "rotation_risk": rot_risk,
-        "ownership_pct": round(fpl_stats.get("ownership_pct", 0) or 0, 1),
-        "price": round(fpl_stats.get("price", 0) or 0, 1),
+        "ownership_pct": _ownership_pct,
+        "estimated_eo": _eo,
+        "is_most_captained": _is_mc,
+        "price": _price,
         "form": round(fpl_stats.get("form", 0) or 0, 1),
         "points_per_game": round(fpl_stats.get("points_per_game", 0) or 0, 1),
         "total_points": fpl_stats.get("total_points", 0) or 0,
@@ -318,6 +329,8 @@ def _build_fpl_analytics(
         "xa_last3": xa_last3,
         "xa_last5": xa_last5,
         "xgi_last5": xgi_last5,
+        "news": fpl_stats.get("news"),
+        "chance_of_playing_next_round": fpl_stats.get("chance_of_playing_next_round"),
     }
 
 

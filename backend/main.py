@@ -322,6 +322,198 @@ async def reseed_fixtures():
     return {"message": "Fixtures re-seeded"}
 
 
+# ── Gameweek Planner ─────────────────────────────────────────────────────────
+
+_POS_FILTER_MAP = {"GK": 1, "DEF": 2, "MID": 3, "FWD": 4}
+_ELEM_TO_POS = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+
+
+@app.get("/api/gameweek-planner")
+async def gameweek_planner(
+    show_all: bool = Query(False),
+    position: str = Query(None, description="GK / DEF / MID / FWD"),
+    max_price: float = Query(None),
+    min_ownership: float = Query(None),
+    max_ownership: float = Query(None),
+):
+    """
+    Ranked table of players for the upcoming gameweek.
+    Single bulk DB load — no per-player queries. Top 100 by default.
+    """
+    from engine.fpl_points import (
+        calculate_xfpl, rotation_risk_label, form_index,
+        fixture_adjusted_form, estimate_eo,
+    )
+    from engine.compare import _fixture_modifier, _fuzzy_team_match, _get_defence_range
+
+    # ── Bulk data load (4 queries total) ──────────────────────────────────
+    players = db.get_all_players_with_fpl_stats()
+    all_fixtures = db.get_upcoming_fixtures(limit=500)
+    team_fdr_list = db.get_all_team_fdr_list()
+    most_captained_fpl_id = db.get_current_most_captained()
+    defence_min, defence_max = _get_defence_range()
+
+    # Team FDR lookup (fuzzy)
+    team_fdr_by_name = {t["team_name"]: t for t in team_fdr_list}
+
+    def _get_opp_fdr(opponent: str):
+        for tn, fdr in team_fdr_by_name.items():
+            if _fuzzy_team_match(opponent, tn):
+                return fdr
+        return None
+
+    # Build team → next fixture map (fixtures already sorted ASC by date)
+    team_next_fixture: dict[str, dict] = {}
+    for fix in all_fixtures:
+        for t in (fix["home_team"], fix["away_team"]):
+            if t not in team_next_fixture:
+                team_next_fixture[t] = fix
+
+    results = []
+    for p in players:
+        # ── Position filter ───────────────────────────────────────────────
+        elem = p.get("element_type", 4) or 4
+        if position:
+            if _POS_FILTER_MAP.get(position.upper(), 0) != elem:
+                continue
+
+        price = p.get("price") or 0
+        ownership = p.get("ownership_pct") or 0
+
+        if max_price is not None and price > max_price:
+            continue
+        if min_ownership is not None and ownership < min_ownership:
+            continue
+        if max_ownership is not None and ownership > max_ownership:
+            continue
+
+        # ── Season-average calculations ───────────────────────────────────
+        starts = p.get("starts", 0) or 0
+        minutes = p.get("minutes", 0) or 0
+        gw_count = max(max(starts, minutes // 90), 1)
+        start_rate = starts / gw_count
+        avg_mins = minutes / gw_count
+
+        xfpl = calculate_xfpl(
+            element_type=elem,
+            xg=p.get("expected_goals", 0) or 0,
+            xa=p.get("expected_assists", 0) or 0,
+            minutes=minutes, starts=starts, total_gw_played=gw_count,
+            clean_sheets=p.get("clean_sheets", 0) or 0,
+            goals_conceded=p.get("goals_conceded", 0) or 0,
+            yellow_cards=p.get("yellow_cards", 0) or 0,
+            red_cards=p.get("red_cards", 0) or 0,
+            saves=p.get("saves", 0) or 0,
+            bonus=p.get("bonus", 0) or 0,
+        )
+
+        predicted_mins = round(start_rate * 87 + (1 - start_rate) * 0.35 * 22)
+        rot_risk = rotation_risk_label(starts, gw_count, avg_mins)
+        rot_mult = {"LOW": 1.0, "MEDIUM": 0.85, "HIGH": 0.6}[rot_risk]
+        avail = (p.get("chance_of_playing_next_round") or 100) / 100
+        mins_factor_adj = (predicted_mins / 90) * rot_mult * avail
+
+        fi = form_index(
+            xg=p.get("expected_goals", 0) or 0,
+            xa=p.get("expected_assists", 0) or 0,
+            sot=p.get("shots_on_target", 0) or 0,
+            key_passes=p.get("key_passes", 0) or 0,
+            minutes=minutes,
+            appearances=gw_count,
+        )
+
+        # ── Next fixture ──────────────────────────────────────────────────
+        team = p.get("team") or ""
+        next_fix = None
+        for t, fix in team_next_fixture.items():
+            if _fuzzy_team_match(team, t):
+                next_fix = fix
+                break
+
+        next_opponent = None
+        next_home_away = None
+        next_opp_strength = None
+        proj_pts = 0.0
+        faf = fi
+
+        if next_fix:
+            ha = "H" if _fuzzy_team_match(team, next_fix.get("home_team", "")) else "A"
+            opponent = next_fix["away_team"] if ha == "H" else next_fix["home_team"]
+            next_home_away = ha
+            next_opponent = opponent
+
+            opp_fdr = _get_opp_fdr(opponent)
+            strength_key = "strength_defence_away" if ha == "H" else "strength_defence_home"
+            opp_strength = opp_fdr.get(strength_key, 1200) if opp_fdr else 1200
+            next_opp_strength = opp_strength
+
+            fix_mod = _fixture_modifier(opp_strength, defence_min, defence_max)
+            proj_pts = round(xfpl * mins_factor_adj * fix_mod, 2)
+            faf = fixture_adjusted_form(fi, opp_strength, ha)
+
+        # ── Effective Ownership ───────────────────────────────────────────
+        is_mc = (most_captained_fpl_id is not None and p.get("fpl_id") == most_captained_fpl_id)
+        eo = estimate_eo(ownership, elem, price, is_mc)
+
+        results.append({
+            "id": p["id"],
+            "name": p["name"],
+            "team": team,
+            "position": _ELEM_TO_POS.get(elem, "FWD"),
+            "element_type": elem,
+            "price": round(price, 1),
+            "ownership_pct": round(ownership, 1),
+            "estimated_eo": eo,
+            "is_most_captained": is_mc,
+            "ep_next": round(p.get("ep_next", 0) or 0, 1),
+            "xfpl_per_game": round(xfpl, 2),
+            "form_index": fi,
+            "fixture_adjusted_form": faf,
+            "next_opponent": next_opponent,
+            "next_home_away": next_home_away,
+            "next_opp_strength": next_opp_strength,
+            "rotation_risk": rot_risk,
+            "proj_pts": proj_pts,
+            "predicted_minutes": predicted_mins,
+            "news": p.get("news"),
+            "chance_of_playing": p.get("chance_of_playing_next_round"),
+        })
+
+    results.sort(key=lambda x: x["proj_pts"], reverse=True)
+    total = len(results)
+    if not show_all:
+        results = results[:100]
+
+    return {"players": results, "count": len(results), "total": total}
+
+
+# ── Transfer Comparison ──────────────────────────────────────────────────────
+
+@app.get("/api/compare")
+async def compare_players(
+    players: str = Query(..., description="Comma-separated player IDs, e.g. 123,456"),
+    gws: int = Query(3, ge=1, le=10, description="Gameweek horizon"),
+    hit: int = Query(0, description="Transfer hit cost (0 or 4)"),
+):
+    """
+    Project FPL points for 2+ players over the next N fixtures.
+    If exactly 2 players are given, also returns a transfer verdict.
+    """
+    try:
+        player_ids = [int(x.strip()) for x in players.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="players must be comma-separated integers")
+
+    if len(player_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 player IDs required")
+
+    if hit not in (0, 4):
+        raise HTTPException(status_code=400, detail="hit must be 0 or 4")
+
+    from engine.compare import compare_players as do_compare
+    return do_compare(player_ids, gws=gws, hit=hit)
+
+
 # ── Chatbot ───────────────────────────────────────────────────────────────────
 
 class ChatMessage(BaseModel):

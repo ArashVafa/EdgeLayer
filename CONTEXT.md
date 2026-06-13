@@ -164,9 +164,15 @@ fpl_stats     — per-player FPL data: ownership_pct, price, form, points_per_ga
                 expected_goals, expected_assists, expected_goal_involvements,
                 minutes, starts, clean_sheets, goals_conceded, yellow_cards,
                 red_cards, saves, bonus, element_type (1=GK/2=DEF/3=MID/4=FWD),
-                transfers_in_event, transfers_out_event, chance_of_playing_next_round
+                transfers_in_event, transfers_out_event, chance_of_playing_next_round,
+                value_form, value_season, ep_next (FPL's own next-GW xPts),
+                news (FPL injury/availability text — replaces blocked premierinjuries.com),
+                news_added (timestamp of news)
 team_fdr      — FPL team strength ratings: strength_overall/attack/defence home/away
                 for all 20 PL teams — used for Fixture Adjusted Form calculation
+fpl_events    — per-GW event data: most_captained_fpl_id/name, most_transferred_in,
+                top_element, average_entry_score, chip_plays_json
+                Used for EO estimation (captaincy proxy)
 ```
 
 ### Training data strategy
@@ -324,6 +330,21 @@ Two feedback files were reviewed (June 2026): "All Indexes .docx" and "Rules and
 - Suspension risk flag (one yellow from suspension)
 - Injury status / doubt flag (chance_of_playing_next_round)
 - Scoring rule chips displayed in UI
+
+### ✅ Implemented (June 2026 — Phase 2)
+- Gameweek Planner as default landing tab — sortable table of all players for upcoming GW
+  - Columns: name, team, pos, price, own%, EO (est.), xFPL, form, fixture-adj form, next opponent, rotation risk, proj pts
+  - Filters: position, max price, min/max ownership (for differential hunting)
+  - Row click → Player Report; Compare button → Transfer Planner
+- Effective Ownership (estimated) — ownership + captaincy proxy from fpl_events.most_captained
+  - Shown in Gameweek Planner, Transfer Planner, and FPL Panel
+  - Labelled "estimated" everywhere; tooltip explains captaincy is not from official API
+- Transfer Planner verdict: eo_note flags template assets (EO>40%) and differentials (<12% own)
+- FPL news / chance_of_playing from bootstrap (replaces blocked premierinjuries.com scraper)
+  - Shown as coloured banner in FPL Panel on Player Report
+- ep_next (FPL's own expected pts), value_form, value_season stored in fpl_stats
+- fpl_events table: most_captained, most_transferred_in, top_element, avg score per GW
+- GET /api/gameweek-planner endpoint (bulk DB load, no per-player queries)
 
 ### ❌ Not yet implemented (needs new data sources)
 - xG/90, xA/90, xGI/90 displayed as standalone stats

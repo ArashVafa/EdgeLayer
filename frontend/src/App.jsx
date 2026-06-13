@@ -1,9 +1,29 @@
 import { useState } from 'react'
 import PlayerSearch from './components/PlayerSearch.jsx'
 import Dashboard from './components/Dashboard.jsx'
+import TransferPlanner from './components/TransferPlanner.jsx'
+import GameweekPlanner from './components/GameweekPlanner.jsx'
+
+const TABS = [
+  { id: 'gameweek', label: 'Gameweek Planner' },
+  { id: 'transfer', label: 'Transfer Planner' },
+  { id: 'report',   label: 'Player Report' },
+]
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState('gameweek')
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [pendingTransferPlayer, setPendingTransferPlayer] = useState(null)
+
+  function handleViewPlayer(player) {
+    setSelectedPlayer(player)
+    setActiveTab('report')
+  }
+
+  function handleComparePlayer(player) {
+    setPendingTransferPlayer(player)
+    setActiveTab('transfer')
+  }
 
   return (
     <>
@@ -12,7 +32,7 @@ export default function App() {
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 32, paddingBottom: 20,
+          marginBottom: 0, paddingBottom: 20,
           borderBottom: '1px solid var(--border)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -21,11 +41,11 @@ export default function App() {
               background: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontWeight: 800, fontSize: 14, color: '#fff', cursor: 'pointer',
-            }} onClick={() => setSelectedPlayer(null)}>
+            }} onClick={() => { setActiveTab('gameweek'); setSelectedPlayer(null) }}>
               EL
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.5px', cursor: 'pointer' }}
-              onClick={() => setSelectedPlayer(null)}>
+              onClick={() => { setActiveTab('gameweek'); setSelectedPlayer(null) }}>
               Edge<span style={{ color: 'var(--cyan)' }}>Layer</span>
             </div>
           </div>
@@ -44,11 +64,54 @@ export default function App() {
           </div>
         </div>
 
+        {/* Tab bar */}
+        <div style={{
+          display: 'flex', gap: 0,
+          borderBottom: '1px solid var(--border)',
+          marginBottom: 32,
+        }}>
+          {TABS.map(tab => {
+            const active = tab.id === activeTab
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '14px 20px',
+                  fontSize: 13, fontWeight: active ? 600 : 500,
+                  fontFamily: 'var(--sans)',
+                  color: active ? 'var(--text)' : 'var(--text-dim)',
+                  borderBottom: active ? '2px solid var(--cyan)' : '2px solid transparent',
+                  marginBottom: -1,
+                  transition: 'color 0.15s, border-color 0.15s',
+                }}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Main content */}
-        {!selectedPlayer ? (
-          <LandingPage onSelect={setSelectedPlayer} />
-        ) : (
-          <Dashboard playerId={selectedPlayer.id} player={selectedPlayer} onBack={() => setSelectedPlayer(null)} />
+        {activeTab === 'report' && (
+          !selectedPlayer ? (
+            <LandingPage onSelect={setSelectedPlayer} />
+          ) : (
+            <Dashboard playerId={selectedPlayer.id} player={selectedPlayer} onBack={() => setSelectedPlayer(null)} />
+          )
+        )}
+        {activeTab === 'transfer' && (
+          <TransferPlanner
+            pendingTransferPlayer={pendingTransferPlayer}
+            onPendingConsumed={() => setPendingTransferPlayer(null)}
+          />
+        )}
+        {activeTab === 'gameweek' && (
+          <GameweekPlanner
+            onViewPlayer={handleViewPlayer}
+            onComparePlayer={handleComparePlayer}
+          />
         )}
 
         {/* Footer */}

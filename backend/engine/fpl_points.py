@@ -177,6 +177,33 @@ def form_index(
     return round(score, 1)
 
 
+def estimate_eo(
+    ownership_pct: float,
+    element_type: int,
+    price: float,
+    is_most_captained: bool = False,
+) -> float:
+    """
+    Estimated Effective Ownership = ownership_pct + captaincy_estimate.
+    FPL does not publish live captaincy %; captaincy portion is approximated
+    from ownership, position, price, and whether the player was most-captained
+    in the latest available GW event data.
+    """
+    if is_most_captained:
+        # Most-captained player: ~30-35% of their owners captain them
+        captaincy_est = min(25.0, ownership_pct * 0.35)
+    elif element_type in (3, 4) and price >= 10.0:
+        # Premium attacker — disproportionately captained
+        captaincy_est = min(12.0, ownership_pct * 0.12)
+    elif ownership_pct > 25:
+        # Widely held template player
+        captaincy_est = min(6.0, ownership_pct * 0.05)
+    else:
+        captaincy_est = min(3.0, ownership_pct * 0.04)
+
+    return round(ownership_pct + captaincy_est, 1)
+
+
 def fixture_adjusted_form(form_score: float, opponent_strength_defence: int, home_away: str = "H") -> float:
     """
     Scale form score by how easy/hard the upcoming fixture is.
