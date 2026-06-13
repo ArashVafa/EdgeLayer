@@ -113,6 +113,9 @@ GET  /api/health                           DB counts + last scrape timestamps
 POST /api/chat/{player_id}                 Player chatbot (body: {message, history[]})
 POST /api/admin/scrape/{source}            Manual scrape trigger (understat/injuries/fixtures/odds/fpl_history/fpl_bootstrap)
 POST /api/admin/reseed-fixtures            Replace fixtures with seed data (fallback)
+GET  /api/compare?players=id1,id2&gws=3   Transfer comparison (2+ players, verdict if exactly 2)
+GET  /api/gameweek-planner                 Ranked player table for upcoming GW (bulk single-query)
+                                           params: show_all, position, max_price, min_ownership, max_ownership
 ```
 
 ---
@@ -146,7 +149,7 @@ Single `chat_complete()` function used by both narratives and chatbot:
 
 ## Database Schema
 
-Tables: `players`, `player_stats`, `match_logs`, `injuries`, `fixtures`, `odds`, `reports_cache`, `scrape_log`, `llm_log`, `llm_feedback`, `users`, `password_reset_tokens`, `fpl_stats`, `team_fdr`
+Tables: `players`, `player_stats`, `match_logs`, `injuries`, `fixtures`, `odds`, `reports_cache`, `scrape_log`, `llm_log`, `llm_feedback`, `users`, `password_reset_tokens`, `fpl_stats`, `team_fdr`, `fpl_events`
 
 ### New tables added (April 2026)
 ```sql
@@ -199,7 +202,7 @@ EdgeLayer/
 ├── backend/
 │   ├── main.py                     ← FastAPI app, all routes, lifespan (auto-seed)
 │   ├── config.py                   ← all env vars + constants
-│   ├── db.py                       ← SQLite schema + all CRUD helpers (incl. fpl_stats, team_fdr)
+│   ├── db.py                       ← SQLite schema + all CRUD helpers (incl. fpl_stats, team_fdr, fpl_events)
 │   ├── auth.py                     ← JWT auth router (built, currently disabled)
 │   ├── scheduler.py                ← APScheduler jobs (5 scrapers incl. fpl_bootstrap every 6h)
 │   ├── seed.py                     ← 31 hardcoded players + GW36-38 fixtures fallback
@@ -207,24 +210,25 @@ EdgeLayer/
 │   ├── requirements.txt
 │   ├── scrapers/
 │   │   ├── understat.py            ← POST API, 3x retry+backoff, sync+async variants
-│   │   ├── fpl_bootstrap.py        ← FPL bootstrap-static API → fpl_stats + team_fdr tables
+│   │   ├── fpl_bootstrap.py        ← FPL bootstrap-static API → fpl_stats + team_fdr + fpl_events
 │   │   ├── fpl_history.py          ← FPL per-player history (GW-level)
-│   │   ├── injuries.py             ← premierinjuries.com (full browser HEADERS)
+│   │   ├── injuries.py             ← premierinjuries.com (full browser HEADERS; blocked on Render)
 │   │   ├── fixtures.py             ← football-data.org free API
 │   │   └── odds.py                 ← the-odds-api.com
 │   └── engine/
 │       ├── llm.py                  ← unified LLM wrapper (Groq + Anthropic)
 │       ├── dimensions.py           ← 13 dimension scoring functions (use fpl_stats for risk/market/form)
 │       ├── scorer.py               ← Edge Score aggregation + report builder + _build_fpl_analytics()
-│       ├── fpl_points.py           ← xFPL calc, captaincy/differential/rotation/form_index/fixture_adj_form
+│       ├── fpl_points.py           ← xFPL, captaincy/differential/rotation/form_index/fixture_adj_form/estimate_eo
+│       ├── compare.py              ← transfer comparison engine; _project_player() + verdict with EO note
 │       ├── narrative.py            ← 3-mode narrative generation via LLM
 │       └── chatbot.py              ← player Q&A chatbot via LLM
 └── frontend/
     ├── vercel.json                  ← VITE_API_URL under build.env (not env!)
     ├── package.json
     └── src/
-        ├── App.jsx                  ← top-level routing (auth disabled, direct app)
-        ├── api.js                   ← axios client, all API + auth calls
+        ├── App.jsx                  ← default tab: Gameweek Planner; pendingTransferPlayer state
+        ├── api.js                   ← axios client, all API calls incl. getGameweekPlanner
         ├── index.css                ← CSS variables, dark theme
         ├── context/
         │   └── AuthContext.jsx      ← auth state (built, not active)
@@ -235,9 +239,11 @@ EdgeLayer/
         │   └── ResetPasswordPage.jsx
         └── components/
             ├── PlayerSearch.jsx
+            ├── GameweekPlanner.jsx  ← default landing: sortable/filterable player table; row→report, compare→transfer
+            ├── TransferPlanner.jsx  ← side-by-side comparison + EO display + verdict with EO note
             ├── Dashboard.jsx        ← full report page; scrolls to top on player change
             ├── ChatPanel.jsx        ← player chatbot UI; only auto-scrolls when messages exist
-            ├── FplPanel.jsx         ← FPL Intelligence section (6 sub-sections, see below)
+            ├── FplPanel.jsx         ← FPL Intelligence: EO display, news/availability banner, 6 sections
             ├── EdgeScore.jsx
             ├── MatchStrip.jsx
             ├── MetricsGrid.jsx
@@ -385,8 +391,11 @@ Two feedback files were reviewed (June 2026): "All Indexes .docx" and "Rules and
 ---
 
 ## UI Behaviour Notes
+- **Default tab**: Gameweek Planner (not Player Report). Logo click also goes to Gameweek Planner.
 - **Page scroll**: Dashboard scrolls to top when a new player is selected (`window.scrollTo(0,0)` in `Dashboard.jsx` useEffect)
 - **Chat scroll**: ChatPanel only auto-scrolls to bottom when there are messages — does NOT scroll on initial render (fixed June 2026)
+- **Compare flow**: Clicking Compare on a Gameweek Planner row pre-fills Transfer IN slot and switches to Transfer Planner tab (`pendingTransferPlayer` state in App.jsx)
+- **EO label**: Everywhere in the UI, EO is explicitly labelled "estimated" or "est." with a tooltip: "Captaincy portion is approximated — FPL does not publish live captaincy %"
 
 ## Known Issues / Gotchas
 - **Match logs are synthetic** — per-game data doesn't exist from Understat anymore
